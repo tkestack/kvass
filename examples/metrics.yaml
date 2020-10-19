@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: metrics
+  name: metrics
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 6
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: metrics
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+      labels:
+        app.kubernetes.io/name: metrics
+    spec:
+      containers:
+        - args:
+            - -label=4
+            - -metrics=1
+            - -value=10
+          command:
+            - /metrics
+          image: ccr.ccs.tencentyun.com/ccr_dev/metrics:1.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9091
+          name: metrics
+          securityContext:
+            privileged: false
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      imagePullSecrets:
+        - name: qcloudregistrykey
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}

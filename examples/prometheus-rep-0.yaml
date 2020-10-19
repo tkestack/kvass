@@ -1,0 +1,129 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: prometheus
+  labels:
+    app.kubernetes.io/name: prometheus
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+   app.kubernetes.io/name: prometheus
+  ports:
+    - name: web
+      protocol: TCP
+      port: 8080
+      targetPort: web
+    - name: grpc
+      port: 10901
+      targetPort: grpc
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app.kubernetes.io/name: prometheus
+  name: prometheus-rep-0
+spec:
+  # must set as Parallel
+  podManagementPolicy: Parallel
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+      kvass/rep: "0"
+  serviceName: prometheus
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: prometheus
+        kvass/rep: "0"
+    spec:
+      containers:
+        - name: thanos
+          image: ccr.ccs.tencentyun.com/tkeimages/thanos:v0.11.0
+          args:
+            - sidecar
+            - --tsdb.path=/prometheus
+            - --prometheus.url=http://localhost:8080
+            - --reloader.config-file=/etc/prometheus/config/prometheus.yml
+            - --reloader.config-envsubst-file=/etc/prometheus/config_out/prometheus.env.yaml
+          ports:
+            - name: http-sidecar
+              containerPort: 10902
+            - name: grpc
+              containerPort: 10901
+          livenessProbe:
+            httpGet:
+              port: 10902
+              path: /-/healthy
+          readinessProbe:
+            httpGet:
+              port: 10902
+              path: /-/ready
+          volumeMounts:
+            - mountPath: /etc/prometheus/config_out
+              name: config-out
+            - mountPath: /etc/prometheus/config
+              name: config
+        - name: kvass
+          args:
+            - shard
+          image: ccr.ccs.tencentyun.com/tkeimages/kvass:v0.0.1
+          imagePullPolicy: Always
+          resources:
+            limits:
+              memory: 256Mi
+            requests:
+              memory: 64Mi
+          volumeMounts:
+            - mountPath: /etc/prometheus/config_out
+              name: config-out
+          ports:
+            - containerPort: 8080
+              name: web
+              protocol: TCP
+
+        - name: prometheus
+          args:
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=3h
+            - --web.enable-lifecycle
+            - --storage.tsdb.no-lockfile
+            - --storage.tsdb.max-block-duration=2h
+            - --storage.tsdb.min-block-duration=2h
+            - --config.file=/etc/prometheus/config_out/prometheus_injected.yaml
+          image: ccr.ccs.tencentyun.com/tkeimages/prometheus:v2.19.2
+          ports:
+            - containerPort: 9090
+              name: web
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /etc/prometheus/config
+              name: config
+            - mountPath: /etc/prometheus/config_out
+              name: config-out
+            - mountPath: /prometheus
+              name: data
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      serviceAccountName: prometheus
+      securityContext:
+        runAsUser: 0
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: config
+          configMap:
+            name: prometheus-config
+            defaultMode: 420
+        - emptyDir: {}
+          name: config-out
+        - emptyDir: {}
+          name: tls-assets
+  updateStrategy:
+    rollingUpdate:
+      partition: 0
+    type: RollingUpdate

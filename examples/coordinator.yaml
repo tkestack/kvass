@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: kvass-coordinator
+  name: kvass-coordinator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kvass-coordinator
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kvass-coordinator
+    spec:
+      serviceAccountName: prometheus
+      containers:
+        - name: config-reload
+          args:
+            - --reload-url=http://localhost:9090/-/reload
+            - --config-file=/etc/prometheus/config/prometheus.yml
+            - --config-envsubst-file=/etc/prometheus/config_out/prometheus.env.yaml
+          image: ccr.ccs.tencentyun.com/tkeimages/prometheus-config-reloader:v0.34.0
+          imagePullPolicy: Always
+          resources:
+            limits:
+              memory: 50Mi
+            requests:
+              memory: 10Mi
+          volumeMounts:
+            - mountPath: /etc/prometheus/config_out
+              name: config-out
+            - mountPath: /etc/prometheus/config
+              name: config
+        - image: ccr.ccs.tencentyun.com/tkeimages/kvass:v0.0.1
+          imagePullPolicy: Always
+          args:
+            - coordinator
+            - --max-series=22000
+            - --sts-selector=app.kubernetes.io/name=prometheus
+            - --sts-namespace=$(NAMESPACE)
+            - --config-file=/etc/prometheus/config_out/prometheus.env.yaml
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+          volumeMounts:
+            - mountPath: /etc/prometheus/config
+              name: config
+            - mountPath: /etc/prometheus/config_out
+              name: config-out
+          name: kvass
+          resources:
+            limits:
+              cpu: 1
+              memory: 2Gi
+            requests:
+              cpu: 250m
+              memory: 20Mi
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+            defaultMode: 420
+        - emptyDir: {}
+          name: config-out
+        - emptyDir: {}
+          name: tls-assets
+
+
