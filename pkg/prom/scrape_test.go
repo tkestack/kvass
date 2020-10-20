@@ -54,7 +54,7 @@ func TestNewScrapeInfos(t *testing.T) {
 	r.NotNil(s)
 
 	r.Equal(time.Second, s.timeout)
-	r.Equal(u.String(), s.proxyUrl.String())
+	r.Equal(u.String(), s.proxyURL.String())
 }
 
 func getGzipData(data []byte) []byte {
@@ -102,7 +102,7 @@ metrics0{code="201"} 2
 			info := &ScrapeInfo{
 				Client:   ts.Client(),
 				Config:   &config.ScrapeConfig{JobName: "test"},
-				proxyUrl: u,
+				proxyURL: u,
 			}
 
 			retData, typ, err := Scrape(info, ts.URL)

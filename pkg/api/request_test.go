@@ -114,7 +114,7 @@ func testCases(t *testing.T, method string) {
 				return
 			}
 			r.NoError(err)
-			r.JSONEq(test.MustJson(cs.wantRet), test.MustJson(cs.ret))
+			r.JSONEq(test.MustJSON(cs.wantRet), test.MustJSON(cs.ret))
 		})
 	}
 }

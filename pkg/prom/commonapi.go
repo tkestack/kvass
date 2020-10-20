@@ -24,7 +24,8 @@ import (
 	"tkestack.io/kvass/pkg/api"
 )
 
-func ApiReadConfig(ctx *gin.Context, readConfig func() ([]byte, error)) *api.Result {
+// APIReadConfig is the default implementation of api /api/v1/status/config
+func APIReadConfig(ctx *gin.Context, readConfig func() ([]byte, error)) *api.Result {
 	data, err := readConfig()
 	if err != nil {
 		return api.InternalErr(err, "can not read config")
@@ -35,7 +36,8 @@ func ApiReadConfig(ctx *gin.Context, readConfig func() ([]byte, error)) *api.Res
 	})
 }
 
-func ApiReloadConfig(readConfig func() ([]byte, error), notify chan *config.Config) *api.Result {
+// APIReloadConfig is the default implementation of api /-/reload
+func APIReloadConfig(readConfig func() ([]byte, error), notify chan *config.Config) *api.Result {
 	var (
 		err  error
 		data []byte

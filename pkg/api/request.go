@@ -27,6 +27,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Post do http post with standard response format
 func Post(url string, req interface{}, ret interface{}) (err error) {
 	reqData := make([]byte, 0)
 	if req != nil {

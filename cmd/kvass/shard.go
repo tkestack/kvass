@@ -40,18 +40,18 @@ var shardCfg = struct {
 	ConfigOutFile string
 	// ProxyAddress is the address for proxy
 	ProxyAddress string
-	// ApiAddress is the address of shard api
-	ApiAddress string
-	// PrometheusUrl is the url of target prometheus
-	PrometheusUrl string
+	// APIAddress is the address of shard api
+	APIAddress string
+	// PrometheusURL is the url of target prometheus
+	PrometheusURL string
 	// DataPath is the root path of prometheus data
 	DataPath string
 }{}
 
 func init() {
 	sidecarCmd.Flags().StringVar(&shardCfg.ProxyAddress, "proxy-addr", ":8008", "proxy listen address")
-	sidecarCmd.Flags().StringVar(&shardCfg.ApiAddress, "api-addr", ":8080", "api listen address")
-	sidecarCmd.Flags().StringVar(&shardCfg.PrometheusUrl, "prometheus-url", "http://127.0.0.1:9090", "url of target prometheus")
+	sidecarCmd.Flags().StringVar(&shardCfg.APIAddress, "api-addr", ":8080", "api listen address")
+	sidecarCmd.Flags().StringVar(&shardCfg.PrometheusURL, "prometheus-url", "http://127.0.0.1:9090", "url of target prometheus")
 	sidecarCmd.Flags().StringVar(&shardCfg.ConfigFile, "config-origin", "/etc/prometheus/config_out/prometheus.env.yaml", "origin config file")
 	sidecarCmd.Flags().StringVar(&shardCfg.ConfigOutFile, "config-output", "/etc/prometheus/config_out/prometheus_injected.yaml", "injected config file")
 	rootCmd.AddCommand(sidecarCmd)
@@ -72,9 +72,9 @@ var sidecarCmd = &cobra.Command{
 			ctx     = context.Background()
 			tm      = shard.NewTargetManager(log.WithField("component", "target manager"))
 			proxy   = shard.NewProxy(tm, log.WithField("component", "proxy"))
-			runtime = shard.NewRuntimeManager(tm, prom.NewClient(shardCfg.PrometheusUrl), log.WithField("component", "runtime"))
+			runtime = shard.NewRuntimeManager(tm, prom.NewClient(shardCfg.PrometheusURL), log.WithField("component", "runtime"))
 			wb      = shard.NewWeb(
-				shardCfg.PrometheusUrl,
+				shardCfg.PrometheusURL,
 				func() (bytes []byte, e error) {
 					return ioutil.ReadFile(shardCfg.ConfigFile)
 				},
@@ -88,7 +88,7 @@ var sidecarCmd = &cobra.Command{
 		})
 
 		g.Go(func() error {
-			return wb.Run(shardCfg.ApiAddress)
+			return wb.Run(shardCfg.APIAddress)
 		})
 
 		g.Go(func() error {
@@ -103,7 +103,7 @@ var sidecarCmd = &cobra.Command{
 						func(bytes []byte) error {
 							return ioutil.WriteFile(shardCfg.ConfigOutFile, bytes, 0755)
 						},
-						shardCfg.PrometheusUrl)
+						shardCfg.PrometheusURL)
 					return err
 				},
 			})

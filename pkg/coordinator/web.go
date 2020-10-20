@@ -29,12 +29,14 @@ import (
 
 // Web is the api server of coordinator
 type Web struct {
+	// gin.Engine is the gin engine for handle http request
 	*gin.Engine
 	ConfigReload chan *config.Config
 	lg           logrus.FieldLogger
 	readConfig   func() ([]byte, error)
 }
 
+// NewWeb return a new web server
 func NewWeb(
 	readConfig func() ([]byte, error),
 	lg logrus.FieldLogger) *Web {
@@ -46,11 +48,11 @@ func NewWeb(
 	}
 
 	w.GET("/api/v1/status/config", api.Wrap(lg, func(ctx *gin.Context) *api.Result {
-		return prom.ApiReadConfig(ctx, readConfig)
+		return prom.APIReadConfig(ctx, readConfig)
 	}))
 	w.GET("/api/v1/targets", api.Wrap(lg, w.targets))
 	w.POST("/-/reload", api.Wrap(lg, func(ctx *gin.Context) *api.Result {
-		return prom.ApiReloadConfig(readConfig, w.ConfigReload)
+		return prom.APIReloadConfig(readConfig, w.ConfigReload)
 	}))
 	return w
 }

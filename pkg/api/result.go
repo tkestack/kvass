@@ -23,13 +23,22 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Status indicate the result status of request, success or error
 type Status string
+
+// ErrorType is not empty if result status is not success
 type ErrorType string
+
+// Result is the common format of all response
 type Result struct {
-	ErrorType ErrorType   `json:"errorType,omitempty"`
-	Err       string      `json:"error,omitempty"`
-	Data      interface{} `json:"data,omitempty"`
-	Status    Status      `json:"status"`
+	// ErrorType is the type of result if Status is not success
+	ErrorType ErrorType `json:"errorType,omitempty"`
+	// Err indicate the error detail
+	Err string `json:"error,omitempty"`
+	// Data is the real data of result, data may be nil even if Status is success
+	Data interface{} `json:"data,omitempty"`
+	// Status indicate whether the result is success
+	Status Status `json:"status"`
 }
 
 // InternalErr make a result with ErrorType ErrorInternal
@@ -59,9 +68,13 @@ func Data(data interface{}) *Result {
 }
 
 const (
-	StatusSuccess Status    = "success"
-	StatusError   Status    = "error"
-	ErrorBadData  ErrorType = "bad_data"
+	// StatusSuccess indicate result Status is success, the data of result is available
+	StatusSuccess Status = "success"
+	// StatusError indicate result is failed, the data may be empty
+	StatusError Status = "error"
+	// ErrorBadData indicate that result is failed because the wrong request data
+	ErrorBadData ErrorType = "bad_data"
+	// ErrorInternal indicate that result is failed because the request data may be right but the server is something wrong
 	ErrorInternal ErrorType = "internal"
 )
 

@@ -60,7 +60,7 @@ func TestRuntimeManager_RuntimeInfo(t *testing.T) {
 		URL:     "http://127.0.0.1:9090",
 		Healthy: "down",
 		Samples: 10,
-		shardId: "shard-0",
+		shardID: "shard-0",
 	}
 
 	promTarget := &v1.Target{
@@ -79,12 +79,12 @@ func TestRuntimeManager_RuntimeInfo(t *testing.T) {
 	}{
 		{
 			name:    "scraping target, Health eq to promTarget ",
-			shardID: localTarget.shardId,
+			shardID: localTarget.shardID,
 			wantRuntimeInfo: &RuntimeInfo{
-				ID:         localTarget.shardId,
+				ID:         localTarget.shardID,
 				HeadSeries: 15, // should add never scraped Target's HeadSeries
 				Targets: map[string][]*Target{
-					localTarget.shardId: {
+					localTarget.shardID: {
 						{
 							JobName: localTarget.JobName,
 							URL:     localTarget.URL,
@@ -97,21 +97,21 @@ func TestRuntimeManager_RuntimeInfo(t *testing.T) {
 		},
 		{
 			name:    "not scraping target, Health eq to localTarget",
-			shardID: localTarget.shardId + "not",
+			shardID: localTarget.shardID + "not",
 			wantRuntimeInfo: &RuntimeInfo{
-				ID:         localTarget.shardId + "not",
+				ID:         localTarget.shardID + "not",
 				HeadSeries: 5, // only return prom report HeadSeries
 				Targets: map[string][]*Target{
-					localTarget.shardId: {localTarget},
+					localTarget.shardID: {localTarget},
 				},
 			},
 		},
 		{
 			name:           "not found target, Health should be unknown and should saved in IDUnknown",
-			shardID:        localTarget.shardId,
+			shardID:        localTarget.shardID,
 			targetNotFound: true,
 			wantRuntimeInfo: &RuntimeInfo{
-				ID:         localTarget.shardId,
+				ID:         localTarget.shardID,
 				HeadSeries: 5, // only return prom report HeadSeries
 				Targets: map[string][]*Target{
 					IDUnknown: {
@@ -139,7 +139,7 @@ func TestRuntimeManager_RuntimeInfo(t *testing.T) {
 			if !cs.targetNotFound {
 				tmp := *localTarget
 				tm.Update(map[string][]*Target{
-					localTarget.shardId: {
+					localTarget.shardID: {
 						&tmp,
 					},
 				}, cs.shardID)
@@ -158,7 +158,7 @@ func TestRuntimeManager_RuntimeInfo(t *testing.T) {
 			})
 			info, err := rt.RuntimeInfo()
 			r.NoError(err)
-			r.JSONEq(test.MustJson(cs.wantRuntimeInfo), test.MustJson(info))
+			r.JSONEq(test.MustJSON(cs.wantRuntimeInfo), test.MustJSON(info))
 		})
 	}
 }
@@ -181,7 +181,7 @@ func TestRuntimeManager_Update(t *testing.T) {
 		},
 	}
 	r.NoError(rt.Update(info))
-	r.JSONEq(test.MustJson(info), test.MustJson(rt.cur))
+	r.JSONEq(test.MustJSON(info), test.MustJSON(rt.cur))
 	r.NotNil(tm.Get("test", "url"))
 }
 

@@ -29,7 +29,8 @@ type TargetManager interface {
 	Get(hash string) *Target
 }
 
-type defReBalancer struct {
+// DefReBalancer is the default implementation of reBalance algorithm
+type DefReBalancer struct {
 	lg          logrus.FieldLogger
 	insManager  ShardsManager
 	tManager    TargetManager
@@ -37,19 +38,21 @@ type defReBalancer struct {
 	maxInstance int
 }
 
+// NewDefBalancer create a new DefReBalancer
 func NewDefBalancer(
 	maxSeries int64,
 	tManager TargetManager,
 	lg logrus.FieldLogger,
-) *defReBalancer {
-	return &defReBalancer{
+) *DefReBalancer {
+	return &DefReBalancer{
 		lg:        lg,
 		tManager:  tManager,
 		maxSeries: maxSeries,
 	}
 }
 
-func (c *defReBalancer) ReBalance(rt []*shard.RuntimeInfo) int32 {
+// ReBalance reBalance runtimeInfo of all shard and return the expect instance number of shards
+func (c *DefReBalancer) ReBalance(rt []*shard.RuntimeInfo) int32 {
 	targets, sli := GlobalTargets(rt)
 	c.tManager.Update(sli)
 	needSpace := int64(0)

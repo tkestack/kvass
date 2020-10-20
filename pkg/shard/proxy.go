@@ -47,6 +47,7 @@ type Proxy struct {
 	log      logrus.FieldLogger
 }
 
+// NewProxy create a new proxy server
 func NewProxy(scraping *TargetManager, log logrus.FieldLogger) *Proxy {
 	return &Proxy{
 		ScrapeInfos: prom.NewScrapInfos(nil),

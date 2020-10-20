@@ -25,7 +25,7 @@ import (
 	"tkestack.io/kvass/pkg/prom"
 )
 
-// RuntimeManager manager shard runtime status such as HeadSeries, shardId
+// RuntimeManager manager shard runtime status such as HeadSeries, shardID
 type RuntimeManager struct {
 	*prom.ScrapeInfos
 	cur        *RuntimeInfo
@@ -34,6 +34,7 @@ type RuntimeManager struct {
 	log        logrus.FieldLogger
 }
 
+// NewRuntimeManager create a new RuntimeManager
 func NewRuntimeManager(
 	tarManager *TargetManager,
 	promCli prom.Client,
@@ -79,7 +80,7 @@ func (r *RuntimeManager) RuntimeInfo() (*RuntimeInfo, error) {
 		localTarget := r.tarManager.Get(job, tt.URL)
 		id := IDUnknown
 		if localTarget != nil {
-			id = localTarget.shardId
+			id = localTarget.shardID
 			tt.Samples = localTarget.Samples
 			// if target belongs to this shard but never scraped
 			// we should add the samples to HeadSeries to predict the series increment
@@ -102,12 +103,16 @@ func (r *RuntimeManager) RuntimeInfo() (*RuntimeInfo, error) {
 	return ret, nil
 }
 
+// Update update current runtimeInfo
 func (r *RuntimeManager) Update(info *RuntimeInfo) error {
 	r.tarManager.Update(info.Targets, info.ID)
 	r.cur = info
 	return nil
 }
 
+// Targets return recovered prometheus discovery targets
+// origin targets fetched from prometheus is not correct since the config prometheus used is injected
+// we should recover targets information to get right target with no injected config
 func (r *RuntimeManager) Targets(state string) (*v1.TargetDiscovery, error) {
 	targets, err := r.promCli.Targets(state)
 	if err != nil {

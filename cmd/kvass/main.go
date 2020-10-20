@@ -33,8 +33,8 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "Kvass",
 	Short: `Prometheus sharding`,
-	Long: `Kvass is a noninvasive PrometheusUrl scaling solution,
-it allows PrometheusUrl shard with "target" granules.`,
+	Long: `Kvass is a noninvasive PrometheusURL scaling solution,
+it allows PrometheusURL shard with "target" granules.`,
 }
 
 func main() {

@@ -23,13 +23,14 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// TargetManager manage all targets information
+// TargetManager manage all targets information that this shard known
 type TargetManager struct {
 	targets map[string]map[string]*Target
 	lastErr sync.Map
 	log     log.FieldLogger
 }
 
+// NewTargetManager create a new TargetManager
 func NewTargetManager(log log.FieldLogger) *TargetManager {
 	return &TargetManager{
 		log:     log,
@@ -63,7 +64,7 @@ func (m *TargetManager) Update(targets map[string][]*Target, groupID string) {
 	for id, ts := range targets {
 		for _, t := range ts {
 			total++
-			t.shardId = id
+			t.shardID = id
 			if id == groupID {
 				t.scraping = true
 				scraping++

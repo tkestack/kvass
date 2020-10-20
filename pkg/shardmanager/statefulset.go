@@ -51,6 +51,7 @@ type StatefulSet struct {
 	getPods         func(lb map[string]string) (*v1.PodList, error)
 }
 
+// NewStatefulSet create a new StatefulSet shards manager
 func NewStatefulSet(cli kubernetes.Interface,
 	stsNamespace string,
 	stsSelector string,
@@ -75,6 +76,7 @@ func NewStatefulSet(cli kubernetes.Interface,
 	}
 }
 
+// Shards return current Shards in the cluster
 func (s *StatefulSet) Shards() ([]shard.Client, error) {
 	stss, err := s.getStatefulSets()
 	if err != nil {
@@ -115,6 +117,7 @@ func (s *StatefulSet) Shards() ([]shard.Client, error) {
 	return ret, nil
 }
 
+// ChangeScale create or delete Shards according to "expReplicate"
 func (s *StatefulSet) ChangeScale(expect int32) error {
 	stss, err := s.cli.AppsV1().StatefulSets(s.stsNamespace).List(v12.ListOptions{
 		LabelSelector: s.stsSelector,

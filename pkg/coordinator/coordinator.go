@@ -45,6 +45,7 @@ type Coordinator struct {
 	period       time.Duration
 }
 
+// NewCoordinator create a new coordinator service
 func NewCoordinator(s ShardsManager,
 	reBalance func(rt []*shard.RuntimeInfo) int32,
 	period time.Duration,
@@ -57,6 +58,7 @@ func NewCoordinator(s ShardsManager,
 	}
 }
 
+// Run do coordinate periodically until ctx done
 func (c *Coordinator) Run(ctx context.Context) error {
 	tk := time.NewTicker(c.period)
 	for {

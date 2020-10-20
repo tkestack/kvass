@@ -30,13 +30,14 @@ import (
 const (
 	// TargetMaxRecordSamples indicate how many samples info should be record
 	TargetMaxRecordSamples = 3
-	IDUnknown              = "__unknown__"
+	// IDUnknown is the shardID for undistributed targets
+	IDUnknown = "__unknown__"
 )
 
-// runtimeInfo contains all running status of this shard
+// RuntimeInfo contains all running status of this shard
 type RuntimeInfo struct {
 	// ID is unique id of shard
-	ID string `json:"shardId,omitempty"`
+	ID string `json:"shardID,omitempty"`
 	// HeadSeries return current head_series of prometheus
 	// shard must set this field
 	HeadSeries int64 `json:"headSeries,omitempty"`
@@ -59,7 +60,7 @@ type Target struct {
 
 	// lastSamples record recent TargetMaxRecordSamples times samples
 	lastSamples []int64
-	shardId     string
+	shardID     string
 	scraping    bool
 	lastErr     string
 }
@@ -102,6 +103,7 @@ func TargetFromProm(jobInfo *config.ScrapeConfig, t *v1.Target) *Target {
 	}
 }
 
+// OriginURL get origin url of job, origin scheme will be set and jobInfo in query params will be deleted
 func OriginURL(jobInfo *config.ScrapeConfig, oldURL string) string {
 	u, _ := url.Parse(oldURL)
 	m, _ := url2.ParseQuery(u.RawQuery)

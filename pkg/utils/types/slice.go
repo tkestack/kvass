@@ -29,7 +29,7 @@ func FindString(target string, slice ...string) bool {
 	return false
 }
 
-// FindString return true if target in slice, return false if not
+// FindStringVague return true if target is a sub string of strings in slice, return false if not
 func FindStringVague(target string, slice ...string) bool {
 	for _, str := range slice {
 		if strings.Contains(str, target) {

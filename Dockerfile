@@ -1,5 +1,5 @@
 FROM curlimages/curl
-ADD ./bin/kvass /bin/kvass
+ADD kvass /bin/kvass
 
 # On busybox 'nobody' has uid `65534'
 USER 65534

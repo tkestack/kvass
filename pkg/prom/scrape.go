@@ -42,17 +42,22 @@ import (
 
 const acceptHeader = `application/openmetrics-text; version=0.0.1,text/plain;version=0.0.4;q=0.5,*/*;q=0.1`
 
-var userAgentHeader = fmt.Sprintf("PrometheusUrl/%s", version.Version)
+var userAgentHeader = fmt.Sprintf("PrometheusURL/%s", version.Version)
 
 // ScrapeInfo container http client for scraping target
 type ScrapeInfo struct {
-	Client   *http.Client
-	Config   *config.ScrapeConfig
-	proxyUrl *url.URL
+	// Client is the http.Client for scraping
+	// all scraping request will be proxy to env SCRAPE_PROXY if it is not empty
+	Client *http.Client
+	// Config is the origin scrape config in config file
+	Config *config.ScrapeConfig
+	// proxyURL save old proxyURL set in ScrapeConfig if env SCRAPE_PROXY is not empty
+	// proxyURL will be saved in head "Origin-Proxy" when scrape request is send
+	proxyURL *url.URL
 	timeout  time.Duration
 }
 
-func NewScrapeInfo(cfg *config.ScrapeConfig) (*ScrapeInfo, error) {
+func newScrapeInfo(cfg *config.ScrapeConfig) (*ScrapeInfo, error) {
 	proxy := os.Getenv("SCRAPE_PROXY")
 	oldProxy := cfg.HTTPClientConfig.ProxyURL
 	if proxy != "" {
@@ -71,23 +76,27 @@ func NewScrapeInfo(cfg *config.ScrapeConfig) (*ScrapeInfo, error) {
 	return &ScrapeInfo{
 		Client:   client,
 		Config:   cfg,
-		proxyUrl: oldProxy.URL,
+		proxyURL: oldProxy.URL,
 		timeout:  time.Duration(cfg.ScrapeTimeout),
 	}, nil
 }
 
+// ScrapeInfos includes all ScrapeInfo of all jobs
 type ScrapeInfos struct {
+	// key is job name
 	m map[string]*ScrapeInfo
 }
 
+// NewScrapInfos create a ScrapeInfos with specified ScrapeInfo set
 func NewScrapInfos(m map[string]*ScrapeInfo) *ScrapeInfos {
 	return &ScrapeInfos{m: m}
 }
 
+// ApplyConfig update ScrapeInfos from config
 func (s *ScrapeInfos) ApplyConfig(cfg *config.Config) error {
 	ret := map[string]*ScrapeInfo{}
 	for _, cfg := range cfg.ScrapeConfigs {
-		info, err := NewScrapeInfo(cfg)
+		info, err := newScrapeInfo(cfg)
 		if err != nil {
 			return errors.Wrap(err, cfg.JobName)
 		}
@@ -97,6 +106,7 @@ func (s *ScrapeInfos) ApplyConfig(cfg *config.Config) error {
 	return nil
 }
 
+// Get search ScrapeInfo by job name, nil will be return if job not exist
 func (s *ScrapeInfos) Get(job string) *ScrapeInfo {
 	return s.m[job]
 }
@@ -112,9 +122,9 @@ func Scrape(s *ScrapeInfo, url string) ([]byte, string, error) {
 	req.Header.Add("Accept", acceptHeader)
 	req.Header.Add("Accept-Encoding", "gzip")
 	req.Header.Set("User-Agent", userAgentHeader)
-	req.Header.Set("X-PrometheusUrl-Scrape-Timeout-Seconds", fmt.Sprintf("%f", s.timeout.Seconds()))
-	if s.proxyUrl != nil {
-		req.Header.Set("Origin-Proxy", s.proxyUrl.String())
+	req.Header.Set("X-PrometheusURL-Scrape-Timeout-Seconds", fmt.Sprintf("%f", s.timeout.Seconds()))
+	if s.proxyURL != nil {
+		req.Header.Set("Origin-Proxy", s.proxyURL.String())
 	}
 
 	resp, err := s.Client.Do(req)
