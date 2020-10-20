@@ -1,16 +1,16 @@
 name: ci
-
-# Run this workflow every time a new commit pushed to your repository
 on: push
-
 jobs:
-  # Set the job key. The key is displayed as the job name
-  # when a job name is not provided
-  codecov:
-    # Name the Job
-    name: codecov
-    # Set the type of machine to run on
+  code-check:
     runs-on: ubuntu-latest
     steps:
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v1.2.1
       - name: Codecov
         uses: codecov/codecov-action@v1.0.14
+        with:
+          file: /tmp/report
+          files: # optional
+          directory: /tmp/report
+          flags: unittests
+          path_to_write_report: /tmp/report/report.result
