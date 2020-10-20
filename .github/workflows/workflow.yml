@@ -1,3 +1,16 @@
-steps:
-  - name: Codecov
-    uses: codecov/codecov-action@v1.0.14
+name: ci
+
+# Run this workflow every time a new commit pushed to your repository
+on: push
+
+jobs:
+  # Set the job key. The key is displayed as the job name
+  # when a job name is not provided
+  codecov:
+    # Name the Job
+    name: codecov
+    # Set the type of machine to run on
+    runs-on: ubuntu-latest
+    steps:
+      - name: Codecov
+        uses: codecov/codecov-action@v1.0.14
