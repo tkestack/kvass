@@ -4,13 +4,11 @@ jobs:
   code-check:
     runs-on: ubuntu-latest
     steps:
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v1.2.1
       - name: Codecov
         uses: codecov/codecov-action@v1.0.14
         with:
-          file: /tmp/report
-          files: # optional
-          directory: /tmp/report
-          flags: unittests
-          path_to_write_report: /tmp/report/report.result
+          file: ./coverage.xml # optional
+          flags: unittests # optional
+          name: codecov-umbrella # optional
+          fail_ci_if_error: true # optional (default = false)
+          verbose: true # optional (default = false)
