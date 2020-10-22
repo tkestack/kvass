@@ -104,7 +104,7 @@ func TestWrap(t *testing.T) {
 				r.Empty(body)
 				return
 			}
-			r.JSONEq(test.MustJson(cs.result), string(body))
+			r.JSONEq(test.MustJSON(cs.result), string(body))
 		})
 	}
 }

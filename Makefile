@@ -1,5 +1,5 @@
 ROJECT_NAME := "tkestack.io/kvass"
-PKG := "$(PROJECT_NAME)"
+PKG := "./"
 PKG_LIST := $(shell go list ${PKG}/... | grep -v /vendor/)
 GO_FILES := $(shell find . -name '*.go' | grep -v /vendor/ | grep -v _test.go)
 

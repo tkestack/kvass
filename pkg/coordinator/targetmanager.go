@@ -34,15 +34,25 @@ import (
 )
 
 const (
+	// MaxExploreTime is the time that target will be explored
 	MaxExploreTime = 2
 )
 
+// Target is the information of shard.Target and is exploring state
 type Target struct {
+	// shard.Target is the basic info of this Target
 	*shard.Target
-	LastError          string    `json:"lastError"`
-	LastScrape         time.Time `json:"lastScrape"`
-	LastScrapeDuration float64   `json:"lastScrapeDuration"`
-	Health             string    `json:"health"`
+	// LastError is not empty if last exploring is error
+	LastError string `json:"lastError"`
+	// LastScrape save the last success scraping time
+	LastScrape time.Time `json:"lastScrape"`
+	// LastScrapeDuration save the last success scraping duration
+	LastScrapeDuration float64 `json:"lastScrapeDuration"`
+	// Health is the status of this Target
+	// up: last scraping is success
+	// down: last scraping is failed
+	// unknown: never scraped
+	Health string `json:"health"`
 
 	maxExploreSample int64
 	exploreTimes     int
@@ -70,6 +80,8 @@ func (t *Target) setScrapeErr(duration time.Duration, err error) {
 // DefTargetManager manager all targets
 // DefTargetManager will explore Target if it is unknown
 type DefTargetManager struct {
+	// prom.ScrapeInfos include all info that scraping need
+	// include http.Client, job config ...
 	*prom.ScrapeInfos
 	logger  logrus.FieldLogger
 	targets map[string]*Target
@@ -81,6 +93,7 @@ type DefTargetManager struct {
 	explore       func(scrapeInfo *prom.ScrapeInfo, url string) (int64, error)
 }
 
+// NewDefTargetManager create a new DefTargetManager
 func NewDefTargetManager(maxCon int, log logrus.FieldLogger) *DefTargetManager {
 	return &DefTargetManager{
 		ScrapeInfos:   prom.NewScrapInfos(nil),
@@ -93,6 +106,8 @@ func NewDefTargetManager(maxCon int, log logrus.FieldLogger) *DefTargetManager {
 	}
 }
 
+// Update update all target that DefTargetManager managed
+// if Target samples < 0 and is not exploring, it will be send for exploring
 func (e *DefTargetManager) Update(all []*shard.Target) {
 	newTargets := map[string]*Target{}
 	newTotal := int64(0)
@@ -114,10 +129,13 @@ func (e *DefTargetManager) Update(all []*shard.Target) {
 	e.total = newTotal
 }
 
+// Get search Target by hash, a nil will be return if Target not found
 func (e *DefTargetManager) Get(hash string) *Target {
 	return e.targets[hash]
 }
 
+// Run start DefTargetManager exploring engine
+// every Target will be explore MaxExploreTime times
 func (e *DefTargetManager) Run(ctx context.Context) error {
 	var g errgroup.Group
 	for i := 0; i < e.maxCon; i++ {

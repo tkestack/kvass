@@ -31,8 +31,8 @@ type Client interface {
 	// runtimeInfo return the current status of this shard, only return tManager targets if scrapingOnly is true,
 	// otherwise ,all target this client discovered will be returned
 	RuntimeInfo() (*RuntimeInfo, error)
-	// targets is compatible with PrometheusUrl /api/v1/targets
-	// the origin PrometheusUrl's config is injected, so the targets it report must be adjusted by client sidecar
+	// targets is compatible with PrometheusURL /api/v1/targets
+	// the origin PrometheusURL's config is injected, so the targets it report must be adjusted by client sidecar
 	Targets(state string) (*v1.TargetDiscovery, error)
 	// updateRuntimeInfo tells shard about global targets info, include targets other shard tManager
 	UpdateRuntimeInfo(r *RuntimeInfo) error
@@ -64,8 +64,8 @@ func (s *client) UpdateRuntimeInfo(r *RuntimeInfo) error {
 	return api.Post(fmt.Sprintf("%s/api/v1/shard/runtimeinfo", s.url), r, nil)
 }
 
-// targets is compatible with PrometheusUrl /api/v1/targets
-// the origin PrometheusUrl's config is injected, so the targets it report must be adjusted by client sidecar
+// targets is compatible with PrometheusURL /api/v1/targets
+// the origin PrometheusURL's config is injected, so the targets it report must be adjusted by client sidecar
 func (s *client) Targets(state string) (*v1.TargetDiscovery, error) {
 	return nil, nil
 }

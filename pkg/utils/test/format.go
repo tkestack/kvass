@@ -21,7 +21,8 @@ import (
 	"encoding/json"
 )
 
-func MustJson(obj interface{}) string {
+// MustJSON marshal obj to json string, a panic will be thrown if marshal failed
+func MustJSON(obj interface{}) string {
 	data, err := json.Marshal(obj)
 	if err != nil {
 		panic(err)

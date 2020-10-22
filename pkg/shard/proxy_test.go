@@ -122,13 +122,13 @@ func TestProxy_ServeHTTP(t *testing.T) {
 
 			tm := NewTargetManager(logrus.New())
 
-			shardId := "shard-0"
+			shardID := "shard-0"
 			if !cs.target.scraping {
-				shardId = "shard-1"
+				shardID = "shard-1"
 			}
 
 			tm.Update(map[string][]*Target{
-				shardId: {cs.target},
+				shardID: {cs.target},
 			}, "shard-0")
 
 			p := NewProxy(tm, logrus.New())

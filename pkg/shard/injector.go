@@ -38,7 +38,7 @@ const (
 // 3. change all scheme to http
 func InjectConfig(readOrigin func() ([]byte, error),
 	writeInjected func([]byte) error,
-	proxyUrl string) (origin *config.Config, injected *config.Config, err error) {
+	proxyURL string) (origin *config.Config, injected *config.Config, err error) {
 	cfgData, err := readOrigin()
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "read origin file failed")
@@ -60,7 +60,7 @@ func InjectConfig(readOrigin func() ([]byte, error),
 		}
 		job.Params[jobNameFormName] = []string{job.JobName}
 
-		u, _ := url.Parse(proxyUrl)
+		u, _ := url.Parse(proxyURL)
 		job.HTTPClientConfig.ProxyURL = config_util.URL{
 			URL: u,
 		}

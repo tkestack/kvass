@@ -38,7 +38,7 @@ func TestApiReloadConfig(t *testing.T) {
 	e := gin.Default()
 	c := make(chan *config.Config, 10)
 	e.POST("/-/reload", api.Wrap(logrus.New(), func(ctx *gin.Context) *api.Result {
-		return ApiReloadConfig(func() (bytes []byte, e error) {
+		return APIReloadConfig(func() (bytes []byte, e error) {
 			return []byte(configTest), nil
 		}, c)
 	}))
@@ -55,7 +55,7 @@ func TestApiReloadConfig(t *testing.T) {
 func TestConfig(t *testing.T) {
 	e := gin.Default()
 	e.GET("/api/v1/status/config", api.Wrap(logrus.New(), func(ctx *gin.Context) *api.Result {
-		return ApiReadConfig(ctx, func() (bytes []byte, e error) {
+		return APIReadConfig(ctx, func() (bytes []byte, e error) {
 			return []byte(configTest), nil
 		})
 	}))

@@ -23,12 +23,13 @@ import (
 	v1 "github.com/prometheus/prometheus/web/api/v1"
 )
 
+// Client is the API client of shard server
 type Client interface {
 	// runtimeInfo return the current status of this shard, only return tManager targets if scrapingOnly is true,
 	// otherwise ,all target this Client discovered will be returned
 	RuntimeInfo() (*RuntimeInfo, error)
-	// targets is compatible with PrometheusUrl /api/v1/targets
-	// the origin PrometheusUrl's Config is injected, so the targets it report must be adjusted by Client sidecar
+	// targets is compatible with PrometheusURL /api/v1/targets
+	// the origin PrometheusURL's Config is injected, so the targets it report must be adjusted by Client sidecar
 	Targets(state string) (*v1.TargetDiscovery, error)
 	// ConfigReload do Config reloading
 	ConfigReload() error
@@ -38,17 +39,22 @@ type client struct {
 	url string
 }
 
+// NewClient return an Client with url
 func NewClient(url string) Client {
 	return &client{
 		url: url,
 	}
 }
 
+// runtimeInfo return the current status of this shard, only return tManager targets if scrapingOnly is true,
+// otherwise ,all target this Client discovered will be returned
 func (c *client) RuntimeInfo() (*RuntimeInfo, error) {
 	ret := &RuntimeInfo{}
 	return ret, api.Get(c.url+"/api/v1/status/runtimeinfo", ret)
 }
 
+// targets is compatible with PrometheusURL /api/v1/targets
+// the origin PrometheusURL's Config is injected, so the targets it report must be adjusted by Client sidecar
 func (c *client) Targets(state string) (*v1.TargetDiscovery, error) {
 	url := c.url + "/api/v1/targets"
 	if state != "" {
@@ -58,6 +64,7 @@ func (c *client) Targets(state string) (*v1.TargetDiscovery, error) {
 	return ret, api.Get(url, ret)
 }
 
+// ConfigReload do Config reloading
 func (c *client) ConfigReload() error {
 	url := c.url + "/-/reload"
 	return api.Post(url, nil, nil)

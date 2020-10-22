@@ -33,7 +33,7 @@ func initConfig(ctx context.Context, configReload chan *config.Config, lg logrus
 		case <-ctx.Done():
 			return nil
 		default:
-			if err := prom.ApiReloadConfig(func() (bytes []byte, e error) {
+			if err := prom.APIReloadConfig(func() (bytes []byte, e error) {
 				return ioutil.ReadFile(cdCfg.ConfigFile)
 			}, configReload); err.Err != "" {
 				lg.Error(err.Err)

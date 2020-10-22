@@ -58,7 +58,7 @@ func TestClient_RuntimeInfo(t *testing.T) {
 	c := NewClient(ts.URL, time.Second)
 	r, err := c.RuntimeInfo()
 	require.NoError(t, err)
-	require.JSONEq(t, test.MustJson(want), test.MustJson(r))
+	require.JSONEq(t, test.MustJSON(want), test.MustJSON(r))
 }
 
 func TestClient_UpdateRuntimeInfo(t *testing.T) {
@@ -75,7 +75,7 @@ func TestClient_UpdateRuntimeInfo(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		data, err := ioutil.ReadAll(req.Body)
 		require.NoError(t, err)
-		require.JSONEq(t, test.MustJson(want), string(data))
+		require.JSONEq(t, test.MustJSON(want), string(data))
 	}))
 	defer ts.Close()
 	c := NewClient(ts.URL, time.Second)

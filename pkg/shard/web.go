@@ -13,19 +13,20 @@ import (
 	"tkestack.io/kvass/pkg/utils/types"
 )
 
-// Web is the api server of coordinator
+// Web is the web server of coordinator
 type Web struct {
 	*gin.Engine
 	ConfigReload chan *config.Config
 	lg           logrus.FieldLogger
 	readConfig   func() ([]byte, error)
-	promUrl      string
+	promURL      string
 	paths        []string
 	runtime      *RuntimeManager
 }
 
+// NewWeb create new web server of coordinator
 func NewWeb(
-	promUrl string,
+	promURL string,
 	readConfig func() ([]byte, error),
 	runtime *RuntimeManager,
 	lg logrus.FieldLogger) *Web {
@@ -34,7 +35,7 @@ func NewWeb(
 		Engine:       gin.Default(),
 		lg:           lg,
 		readConfig:   readConfig,
-		promUrl:      promUrl,
+		promURL:      promURL,
 		runtime:      runtime,
 	}
 
@@ -42,10 +43,10 @@ func NewWeb(
 	w.GET(w.handlePath("/api/v1/shard/runtimeinfo"), api.Wrap(w.lg, w.runtimeInfo))
 	w.GET(w.handlePath("/api/v1/targets"), api.Wrap(w.lg, w.targets))
 	w.GET(w.handlePath("/api/v1/status/config"), api.Wrap(lg, func(ctx *gin.Context) *api.Result {
-		return prom.ApiReadConfig(ctx, readConfig)
+		return prom.APIReadConfig(ctx, readConfig)
 	}))
 	w.POST(w.handlePath("/-/reload"), api.Wrap(lg, func(ctx *gin.Context) *api.Result {
-		return prom.ApiReloadConfig(readConfig, w.ConfigReload)
+		return prom.APIReloadConfig(readConfig, w.ConfigReload)
 	}))
 	return w
 }
@@ -55,17 +56,20 @@ func (w *Web) handlePath(path string) string {
 	return path
 }
 
+// Run start web server
 func (w *Web) Run(address string) error {
 	return http.ListenAndServe(address, w)
 }
 
+// ServeHTTP handle all http request, request that registered by this web server will be deal
+// other request will be direct proxy to local prometheus
 func (w *Web) ServeHTTP(wr http.ResponseWriter, r *http.Request) {
 	if types.FindString(r.URL.Path, w.paths...) {
 		w.Engine.ServeHTTP(wr, r)
 		return
 	}
 
-	u, _ := url.Parse(w.promUrl)
+	u, _ := url.Parse(w.promURL)
 	r.URL.Host = u.Host
 	r.URL.Scheme = u.Scheme
 	r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))

@@ -48,9 +48,9 @@ func TestTargetManager(t *testing.T) {
 
 	tar := tm.Get(scraping.JobName, scraping.URL)
 	r.True(tar.scraping)
-	r.Equal("shard-0", tar.shardId)
+	r.Equal("shard-0", tar.shardID)
 
 	tar = tm.Get(noScraping.JobName, noScraping.URL)
 	r.False(tar.scraping)
-	r.Equal(IDUnknown, tar.shardId)
+	r.Equal(IDUnknown, tar.shardID)
 }

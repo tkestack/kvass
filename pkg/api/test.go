@@ -28,6 +28,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestCall create a httptest server and do http request to it
+// the data in params will be write to server and the ret in params is deemed to the Data of common Result
 func TestCall(t *testing.T, engine *gin.Engine, uri, method, data string, ret interface{}) *require.Assertions {
 	gin.SetMode(gin.ReleaseMode)
 	req := httptest.NewRequest(method, uri, strings.NewReader(data))
