@@ -1,6 +1,6 @@
-
 # Kvass
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/tkestack/kvass)](https://goreportcard.com/report/github.com/tkestack/kvass)[![Build](https://github.com/tkestack/kvass/workflows/Build/badge.svg?branch=master)]()[![codecov](https://codecov.io/gh/tkestack/kvass/branch/master/graph/badge.svg)](https://codecov.io/gh/tkestack/kvass)
 ------
 
 Kvass provides a method of Prometheus sharding, which uses config file injection to proxy Prometheus scraping to the shard sidecar, and the shard sidecar decides whether to scrape target。
