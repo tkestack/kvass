@@ -65,7 +65,7 @@ var coordinatorCmd = &cobra.Command{
 	Use:   "coordinator",
 	Short: "coordinator manager all prometheus shard",
 	Long: `coordinator collects targets information from all shard and 
-calculates the targets list that each shard should be responsible for`,
+distribution targets to shards`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := cmd.Flags().Parse(args); err != nil {
 			return err
