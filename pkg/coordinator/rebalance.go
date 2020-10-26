@@ -84,9 +84,6 @@ l1:
 
 	totalSeries := needSpace
 	for _, r := range rt {
-		if r == nil {
-			continue
-		}
 		r.Targets = newTargets
 		totalSeries += r.HeadSeries
 	}

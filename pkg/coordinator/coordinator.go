@@ -84,12 +84,22 @@ func (c *Coordinator) runOnce() error {
 		return errors.Wrapf(err, "get global runtime info failed")
 	}
 
-	replicate := c.reBalance(rt)
+	replicate := c.reBalance(filterHealthyRuntime(rt))
 	if err := c.applyRuntimeInfo(groups, rt); err != nil {
 		return errors.Wrap(err, "sync")
 	}
 
 	return c.shardManager.ChangeScale(replicate)
+}
+
+func filterHealthyRuntime(rt []*shard.RuntimeInfo) []*shard.RuntimeInfo {
+	ret := make([]*shard.RuntimeInfo, 0)
+	for _, r := range rt {
+		if r != nil {
+			ret = append(ret, r)
+		}
+	}
+	return ret
 }
 
 func (c *Coordinator) globalRuntimeInfo(gs []shard.Client) ([]*shard.RuntimeInfo, error) {
@@ -120,6 +130,9 @@ func (c *Coordinator) applyRuntimeInfo(gs []shard.Client, rt []*shard.RuntimeInf
 	wait := errgroup.Group{}
 	for i := range gs {
 		index := i
+		if rt[i] == nil {
+			continue
+		}
 		wait.Go(func() error {
 			err := gs[index].UpdateRuntimeInfo(rt[index])
 			if err != nil {

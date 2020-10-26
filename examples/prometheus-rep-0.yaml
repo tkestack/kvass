@@ -42,7 +42,7 @@ spec:
     spec:
       containers:
         - name: thanos
-          image: ccr.ccs.tencentyun.com/tkeimages/thanos:v0.11.0
+          image: thanosio/thanos:v0.16.0-rc.1
           args:
             - sidecar
             - --tsdb.path=/prometheus
@@ -70,7 +70,7 @@ spec:
         - name: kvass
           args:
             - shard
-          image: ccr.ccs.tencentyun.com/tkeimages/kvass:v0.0.1
+          image: tkestack/kvass:v0.0.1
           imagePullPolicy: Always
           resources:
             limits:
@@ -94,7 +94,7 @@ spec:
             - --storage.tsdb.max-block-duration=2h
             - --storage.tsdb.min-block-duration=2h
             - --config.file=/etc/prometheus/config_out/prometheus_injected.yaml
-          image: ccr.ccs.tencentyun.com/tkeimages/prometheus:v2.19.2
+          image: prom/prometheus:v2.19.2
           ports:
             - containerPort: 9090
               name: web

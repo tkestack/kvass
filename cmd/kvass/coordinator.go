@@ -111,6 +111,10 @@ distribution targets to shards`,
 		})
 
 		g.Go(func() error {
+			return tar.Run(ctx)
+		})
+
+		g.Go(func() error {
 			return reloadConfig(ctx, wb.ConfigReload, lg, []func(cfg *config.Config) error{
 				tar.ApplyConfig,
 			})

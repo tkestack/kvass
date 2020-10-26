@@ -26,7 +26,7 @@ spec:
             - --reload-url=http://localhost:9090/-/reload
             - --config-file=/etc/prometheus/config/prometheus.yml
             - --config-envsubst-file=/etc/prometheus/config_out/prometheus.env.yaml
-          image: ccr.ccs.tencentyun.com/tkeimages/prometheus-config-reloader:v0.34.0
+          image: rancher/coreos-prometheus-config-reloader:v0.32.0
           imagePullPolicy: Always
           resources:
             limits:
@@ -38,11 +38,11 @@ spec:
               name: config-out
             - mountPath: /etc/prometheus/config
               name: config
-        - image: ccr.ccs.tencentyun.com/tkeimages/kvass:v0.0.1
+        - image: tkestack/kvass:v0.0.1
           imagePullPolicy: Always
           args:
             - coordinator
-            - --max-series=22000
+            - --max-series=30000
             - --sts-selector=app.kubernetes.io/name=prometheus
             - --sts-namespace=$(NAMESPACE)
             - --config-file=/etc/prometheus/config_out/prometheus.env.yaml

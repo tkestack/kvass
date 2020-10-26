@@ -28,13 +28,13 @@ import (
 
 // Client define the Http API of one shard
 type Client interface {
-	// runtimeInfo return the current status of this shard, only return tManager targets if scrapingOnly is true,
+	// RuntimeInfo return the current status of this shard, only return tManager targets if scrapingOnly is true,
 	// otherwise ,all target this client discovered will be returned
 	RuntimeInfo() (*RuntimeInfo, error)
-	// targets is compatible with PrometheusURL /api/v1/targets
+	// Targets is compatible with PrometheusURL /api/v1/targets
 	// the origin PrometheusURL's config is injected, so the targets it report must be adjusted by client sidecar
 	Targets(state string) (*v1.TargetDiscovery, error)
-	// updateRuntimeInfo tells shard about global targets info, include targets other shard tManager
+	// UpdateRuntimeInfo tells shard about global targets info, include targets other shard tManager
 	UpdateRuntimeInfo(r *RuntimeInfo) error
 }
 

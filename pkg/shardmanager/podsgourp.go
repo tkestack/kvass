@@ -50,7 +50,6 @@ func newPodsGroup(id string, log logrus.FieldLogger) *podsGroup {
 
 func (s *podsGroup) RuntimeInfo() (*shard.RuntimeInfo, error) {
 	ret := &shard.RuntimeInfo{
-		ID:      s.id,
 		Targets: map[string][]*shard.Target{},
 	}
 
@@ -76,7 +75,7 @@ func (s *podsGroup) RuntimeInfo() (*shard.RuntimeInfo, error) {
 			return nil
 		})
 	}
-
+	ret.ID = s.id
 	_ = g.Wait()
 	if !success {
 		return nil, fmt.Errorf("no success shard in group %s", s.id)
@@ -89,6 +88,7 @@ func (s *podsGroup) RuntimeInfo() (*shard.RuntimeInfo, error) {
 func (s *podsGroup) UpdateRuntimeInfo(r *shard.RuntimeInfo) error {
 	g := errgroup.Group{}
 	success := false
+	r.ID = s.id
 	for _, tsd := range s.pods {
 		sd := tsd
 		g.Go(func() error {
@@ -103,7 +103,6 @@ func (s *podsGroup) UpdateRuntimeInfo(r *shard.RuntimeInfo) error {
 	}
 
 	_ = g.Wait()
-
 	if !success {
 		return fmt.Errorf("no success shard in group %s", s.id)
 	}

@@ -37,15 +37,15 @@ we will scrape metrics from them。
 
 ![image-20200916185943754](./README.assets/image-20200916185943754.png)
 
-the max series each Prometheus Shard can scape is defined as an argurment in Coordinator Pod.
+the max series each Prometheus Shard can scrape is a flag of Coordinator Pod.
 
-in the example case we set to 22000.
+in the example case we set to 30000.
 
 > ```
-> --max-series=22000
+> --max-series=30000
 > ```
 
-now we have 6 target with 60270 series  (270 series from golang default metrics)  and each Shard can scrape 22000 series，so we beed 3 Shard to cover all targets.
+now we have 6 target with 60000+ series  and each Shard can scrape 30000 series，so need 3 Shard to cover all targets.
 
 ![image-20200916190045700](./README.assets/image-20200916190045700.png)
 
@@ -53,7 +53,7 @@ now Coordinator  automaticly change replicate of Prometheus Statefulset to 3 and
 
 ![image-20200916190143119](./README.assets/image-20200916190143119.png)
 
-only 20120 series in prometheus_tsdb_head of one Shard
+only 20000+ series in prometheus_tsdb_head of one Shard
 
 ![image-20200917112924277](./README.assets/image-20200917112924277.png)
 

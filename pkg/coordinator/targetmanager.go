@@ -196,8 +196,8 @@ func (e *DefTargetManager) exploreOnce(ctx context.Context, t *Target) (done boo
 		return false, nil
 	}
 
-	e.logger.Infof("exploring target %s done, samples=%d", t.Hash())
 	t.Samples = t.maxExploreSample
+	e.logger.Infof("exploring target %s done, samples=%d", t.Hash(), t.Samples)
 	return true, nil
 }
 
