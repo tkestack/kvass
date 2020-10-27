@@ -13,5 +13,3 @@ dockers:
       - "tkestack/kvass:{{ .Tag }}"
     binaries:
       - kvass
-    goarch: amd64
-    goos: linux
