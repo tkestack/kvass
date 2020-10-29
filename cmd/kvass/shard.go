@@ -20,6 +20,7 @@ package main
 import (
 	"context"
 	"io/ioutil"
+	"path"
 
 	"tkestack.io/kvass/pkg/prom"
 
@@ -98,21 +99,15 @@ var sidecarCmd = &cobra.Command{
 				proxy.ApplyConfig,
 				runtime.ApplyConfig,
 				func(cfg *config.Config) error {
-					_, _, err := shard.InjectConfig(
-						func() (bytes []byte, e error) {
-							return ioutil.ReadFile(shardCfg.ConfigFile)
+					it := shard.NewInjector(shardCfg.ConfigFile, shardCfg.ConfigOutFile, path.Dir(shardCfg.ConfigOutFile))
+					_, _, err := it.InjectConfig(shard.InjectConfigOptions{
+						ProxyURL: shardCfg.InjectProxyURL,
+						KubernetesSD: shard.InjectConfigKubernetesSD{
+							APIServerURL: shardCfg.InjectKubernetesURL,
+							Token:        shardCfg.InjectKubernetesToken,
+							ProxyURL:     shardCfg.InjectKubernetesProxy,
 						},
-						func(bytes []byte) error {
-							return ioutil.WriteFile(shardCfg.ConfigOutFile, bytes, 0755)
-						},
-						shard.InjectConfigOptions{
-							ProxyURL: shardCfg.InjectProxyURL,
-							KubernetesSD: shard.InjectConfigKubernetesSD{
-								APIServerURL: shardCfg.InjectKubernetesURL,
-								Token:        shardCfg.InjectKubernetesToken,
-								ProxyURL:     shardCfg.InjectKubernetesProxy,
-							},
-						},
+					},
 					)
 					return err
 				},

@@ -32,26 +32,44 @@ scrape_configs:
 - job_name: test
   honor_timestamps: true
   metrics_path: /metrics
+  bearer_token: "123"
   scheme: https
   static_configs:
   - targets:
     - "127.0.0.1:9091"
+  kubernetes_sd_configs:
+  - role: endpoints
 `
-	origin, injected, err := InjectConfig(
-		func() (bytes []byte, e error) {
-			return []byte(originData), nil
-		},
+	i := NewInjector("", "", "")
+	i.readFile = func(name string) (bytes []byte, e error) {
+		return []byte(originData), nil
+	}
 
-		func(bytes []byte) error {
-			return nil
+	i.writeFile = func(filename string, data []byte) error {
+		return nil
+	}
+
+	origin, injected, err := i.InjectConfig(
+		InjectConfigOptions{
+			ProxyURL: "http://127.0.0.1:8080",
+			KubernetesSD: InjectConfigKubernetesSD{
+				APIServerURL: "https://127.0.0.1:443",
+				Token:        "token-test",
+				ProxyURL:     "http://127.0.0.1:8009",
+			},
 		},
-		"http://127.0.0.1:8080",
 	)
+
 	require.NoError(t, err)
+	iCfg := injected.ScrapeConfigs[0]
 	require.Empty(t, origin.ScrapeConfigs[0].HTTPClientConfig.ProxyURL)
-	require.Equal(t, "http://127.0.0.1:8080", injected.ScrapeConfigs[0].HTTPClientConfig.ProxyURL.String())
+	require.Equal(t, "http://127.0.0.1:8080", iCfg.HTTPClientConfig.ProxyURL.String())
 	require.Empty(t, origin.ScrapeConfigs[0].Params)
-	require.Equal(t, "test", injected.ScrapeConfigs[0].Params.Get(jobNameFormName))
+	require.Equal(t, "test", iCfg.Params.Get(jobNameFormName))
+	require.NotEmpty(t, iCfg.HTTPClientConfig.BearerTokenFile)
+
 	require.Equal(t, "https", origin.ScrapeConfigs[0].Scheme)
-	require.Equal(t, "http", injected.ScrapeConfigs[0].Scheme)
+	require.Equal(t, "http", iCfg.Scheme)
+	require.Equal(t, "https://127.0.0.1:443", iCfg.ServiceDiscoveryConfig.KubernetesSDConfigs[0].APIServer.String())
+	require.Equal(t, "http://127.0.0.1:8009", iCfg.ServiceDiscoveryConfig.KubernetesSDConfigs[0].HTTPClientConfig.ProxyURL.String())
 }
