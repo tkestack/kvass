@@ -121,7 +121,6 @@ func (c *Coordinator) globalRuntimeInfo(gs []shard.Client) ([]*shard.RuntimeInfo
 			return nil
 		})
 	}
-
 	_ = wait.Wait()
 	return rt, nil
 }

@@ -56,7 +56,11 @@ func NewClient(url string, timeout time.Duration) Client {
 // runtimeInfo return the current status of this shard
 func (s *client) RuntimeInfo() (*RuntimeInfo, error) {
 	ret := &RuntimeInfo{}
-	return ret, api.Get(fmt.Sprintf("%s/api/v1/shard/runtimeinfo", s.url), ret)
+	if err := api.Get(fmt.Sprintf("%s/api/v1/shard/runtimeinfo", s.url), ret); err != nil {
+		return nil, err
+	}
+
+	return ret, nil
 }
 
 // updateRuntimeInfo tells shard about global targets info, include targets other shard tManager
