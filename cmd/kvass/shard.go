@@ -34,18 +34,16 @@ import (
 )
 
 var shardCfg = struct {
-	// ConfigFile is the path of origin config file
-	ConfigFile string
-	// ConfigOutFile is the path of injected config file
-	ConfigOutFile string
-	// ProxyAddress is the address for proxy
-	ProxyAddress string
-	// APIAddress is the address of shard api
-	APIAddress string
-	// PrometheusURL is the url of target prometheus
-	PrometheusURL string
-	// DataPath is the root path of prometheus data
-	DataPath string
+	ConfigFile            string
+	ConfigOutFile         string
+	ProxyAddress          string
+	APIAddress            string
+	PrometheusURL         string
+	DataPath              string
+	InjectProxyURL        string
+	InjectKubernetesURL   string
+	InjectKubernetesToken string
+	InjectKubernetesProxy string
 }{}
 
 func init() {
@@ -54,6 +52,10 @@ func init() {
 	sidecarCmd.Flags().StringVar(&shardCfg.PrometheusURL, "prometheus-url", "http://127.0.0.1:9090", "url of target prometheus")
 	sidecarCmd.Flags().StringVar(&shardCfg.ConfigFile, "config-origin", "/etc/prometheus/config_out/prometheus.env.yaml", "origin config file")
 	sidecarCmd.Flags().StringVar(&shardCfg.ConfigOutFile, "config-output", "/etc/prometheus/config_out/prometheus_injected.yaml", "injected config file")
+	sidecarCmd.Flags().StringVar(&shardCfg.InjectProxyURL, "inject.proxy", "http://127.0.0.1:8008", "proxy url to inject to all job")
+	sidecarCmd.Flags().StringVar(&shardCfg.InjectKubernetesURL, "inject.kubernetes-url", "", "APIServer url to inject to all kubernetes SD")
+	sidecarCmd.Flags().StringVar(&shardCfg.InjectKubernetesToken, "inject.kubernetes-token", "", "APIServer token to inject to all kubernetes SD")
+	sidecarCmd.Flags().StringVar(&shardCfg.InjectKubernetesProxy, "inject.kubernetes-proxy", "", "APIServer proxy to inject to all kubernetes SD")
 	rootCmd.AddCommand(sidecarCmd)
 }
 
@@ -103,7 +105,15 @@ var sidecarCmd = &cobra.Command{
 						func(bytes []byte) error {
 							return ioutil.WriteFile(shardCfg.ConfigOutFile, bytes, 0755)
 						},
-						shardCfg.PrometheusURL)
+						shard.InjectConfigOptions{
+							ProxyURL: shardCfg.InjectProxyURL,
+							KubernetesSD: shard.InjectConfigKubernetesSD{
+								APIServerURL: shardCfg.InjectKubernetesURL,
+								Token:        shardCfg.InjectKubernetesToken,
+								ProxyURL:     shardCfg.InjectKubernetesProxy,
+							},
+						},
+					)
 					return err
 				},
 			})

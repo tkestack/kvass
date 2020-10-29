@@ -35,12 +35,14 @@ type DefReBalancer struct {
 	insManager  ShardsManager
 	tManager    TargetManager
 	maxSeries   int64
+	maxShard    int32
 	maxInstance int
 }
 
 // NewDefBalancer create a new DefReBalancer
 func NewDefBalancer(
 	maxSeries int64,
+	maxShard int32,
 	tManager TargetManager,
 	lg logrus.FieldLogger,
 ) *DefReBalancer {
@@ -48,6 +50,7 @@ func NewDefBalancer(
 		lg:        lg,
 		tManager:  tManager,
 		maxSeries: maxSeries,
+		maxShard:  maxShard,
 	}
 }
 
@@ -89,9 +92,14 @@ l1:
 	}
 
 	// need to increment new Shards
-	needRep := totalSeries/c.maxSeries + 1
+	needRep := int32(totalSeries/c.maxSeries + 1)
+	if needRep > c.maxShard {
+		needRep = c.maxShard
+		c.lg.Warnf("need ShardsGroup = %d, but max = %d", needRep, c.maxShard)
+	}
+
 	c.lg.Infof("total series = %d, need ShardsGroup = %d", totalSeries, needRep)
-	return int32(needRep)
+	return needRep
 }
 
 // GlobalTargets combine all runtime info to get global Target set

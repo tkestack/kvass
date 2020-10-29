@@ -42,6 +42,7 @@ var cdCfg = struct {
 	StsPort         int
 	MaxIdleDuration time.Duration
 	MaxSeries       int64
+	MaxShard        int32
 	MaxExploreCon   int
 	WebAddress      string
 	ConfigFile      string
@@ -49,11 +50,12 @@ var cdCfg = struct {
 }{}
 
 func init() {
-	coordinatorCmd.Flags().StringVar(&cdCfg.StsNamespace, "sts-namespace", "", "namespace of target prometheus cluster")
-	coordinatorCmd.Flags().StringVar(&cdCfg.StsSelector, "sts-selector", "app.kubernetes.io/name=prometheus", "label selector for select target statefulsets")
-	coordinatorCmd.Flags().IntVar(&cdCfg.StsPort, "sts-port", 8080, "the port of kvass shard")
+	coordinatorCmd.Flags().StringVar(&cdCfg.StsNamespace, "sts-namespace", "", "namespace of target shard StatefulSets")
+	coordinatorCmd.Flags().StringVar(&cdCfg.StsSelector, "sts-selector", "app.kubernetes.io/name=prometheus", "label selector for select target StatefulSets")
+	coordinatorCmd.Flags().IntVar(&cdCfg.StsPort, "sts-port", 8080, "the port of shard client")
 	coordinatorCmd.Flags().DurationVar(&cdCfg.MaxIdleDuration, "max-idle", time.Hour*3, "the wait time before idle instance been deleted")
-	coordinatorCmd.Flags().Int64Var(&cdCfg.MaxSeries, "max-series", 1000000, "max series of per instance")
+	coordinatorCmd.Flags().Int64Var(&cdCfg.MaxSeries, "max-series", 1000000, "max series of per shard")
+	coordinatorCmd.Flags().Int32Var(&cdCfg.MaxShard, "max-shard", 999999, "max shard number")
 	coordinatorCmd.Flags().IntVar(&cdCfg.MaxExploreCon, "max-concurrence", 50, "max explore concurrence")
 	coordinatorCmd.Flags().StringVar(&cdCfg.WebAddress, "listen-address", ":9090", "server bind address")
 	coordinatorCmd.Flags().StringVar(&cdCfg.ConfigFile, "config-file", "prometheus.yml", "config file path")
@@ -86,8 +88,9 @@ distribution targets to shards`,
 			tar = coordinator.NewDefTargetManager(cdCfg.MaxExploreCon, log.WithField("component", "target manager"))
 			ins = shardmanager.NewStatefulSet(cli, cdCfg.StsNamespace,
 				cdCfg.StsSelector,
-				cdCfg.StsPort, log.WithField("component", "shard manager"))
-			balancer = coordinator.NewDefBalancer(cdCfg.MaxSeries, tar, log.WithField("component", "balance"))
+				cdCfg.StsPort,
+				log.WithField("component", "shard manager"))
+			balancer = coordinator.NewDefBalancer(cdCfg.MaxSeries, cdCfg.MaxShard, tar, log.WithField("component", "balance"))
 
 			cd = coordinator.NewCoordinator(ins,
 				balancer.ReBalance,

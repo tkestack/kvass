@@ -113,7 +113,7 @@ func TestDefReBalance_ReBalance(t *testing.T) {
 	for _, cs := range cases {
 		t.Run(cs.name, func(t *testing.T) {
 			r := require.New(t)
-			b := NewDefBalancer(maxSeries, newFakeTargetManager(cs.defSamples), logrus.New())
+			b := NewDefBalancer(maxSeries, 9999, newFakeTargetManager(cs.defSamples), logrus.New())
 			r.Equal(cs.wantReplicate, b.ReBalance(cs.inputRt))
 			for _, rt := range cs.inputRt {
 				r.Equal(cs.wantTargetsNumber[rt.ID], len(cs.inputRt[0].Targets[rt.ID]), rt.ID)
