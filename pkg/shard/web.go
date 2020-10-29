@@ -13,9 +13,6 @@ import (
 	"tkestack.io/kvass/pkg/utils/types"
 )
 
-type IRuntimeManager interface {
-}
-
 // Web is the web server of coordinator
 type Web struct {
 	*gin.Engine
