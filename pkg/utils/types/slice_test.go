@@ -31,5 +31,6 @@ func TestFindString(t *testing.T) {
 func TestFindStringVague(t *testing.T) {
 	require.True(t, FindStringVague("1", "1", "2"))
 	require.True(t, FindStringVague("1", "11", "22"))
+	require.True(t, FindStringVague("api/v1/shard/runtimeinfo", "/api/v1/shard/runtimeinfo/", "22"))
 	require.False(t, FindStringVague("3", "1", "2"))
 }

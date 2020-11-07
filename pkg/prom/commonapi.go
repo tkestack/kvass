@@ -18,6 +18,8 @@
 package prom
 
 import (
+	"fmt"
+
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/prometheus/config"
 	"gopkg.in/yaml.v2"
@@ -25,7 +27,7 @@ import (
 )
 
 // APIReadConfig is the default implementation of api /api/v1/status/config
-func APIReadConfig(ctx *gin.Context, readConfig func() ([]byte, error)) *api.Result {
+func APIReadConfig(readConfig func() ([]byte, error)) *api.Result {
 	data, err := readConfig()
 	if err != nil {
 		return api.InternalErr(err, "can not read config")
@@ -46,6 +48,8 @@ func APIReloadConfig(readConfig func() ([]byte, error), notify chan *config.Conf
 	if err != nil {
 		return api.InternalErr(err, "read config")
 	}
+
+	fmt.Println(string(data))
 
 	cfg := &config.Config{}
 	if err := yaml.Unmarshal(data, cfg); err != nil {

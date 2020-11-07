@@ -20,46 +20,61 @@ package main
 import (
 	"context"
 	"io/ioutil"
+	"sync"
 	"time"
+	"tkestack.io/kvass/pkg/discovery"
+	"tkestack.io/kvass/pkg/explore"
+	"tkestack.io/kvass/pkg/scrape"
+	"tkestack.io/kvass/pkg/shard"
+	k8s_shard "tkestack.io/kvass/pkg/shard/kubernetes"
+	"tkestack.io/kvass/pkg/target"
+
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+
+	"github.com/prometheus/common/promlog"
+	prom_discovery "github.com/prometheus/prometheus/discovery"
 
 	"github.com/prometheus/prometheus/config"
 
 	"golang.org/x/sync/errgroup"
 
-	"tkestack.io/kvass/pkg/shardmanager"
-
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-
-	log "github.com/sirupsen/logrus"
+	"github.com/go-kit/kit/log"
+	sd_config "github.com/prometheus/prometheus/discovery/config"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+
 	"tkestack.io/kvass/pkg/coordinator"
 )
 
 var cdCfg = struct {
-	StsNamespace    string
-	StsSelector     string
-	StsPort         int
-	MaxIdleDuration time.Duration
-	MaxSeries       int64
-	MaxShard        int32
-	MaxExploreCon   int
-	WebAddress      string
-	ConfigFile      string
-	SyncInterval    time.Duration
+	shardNamespace string
+	shardSelector  string
+	shardPort      int
+	shardMaxSeries int64
+	shadMaxShard   int32
+	exploreMaxCon  int
+	webAddress     string
+	configFile     string
+	syncInterval   time.Duration
+	configInject   configInjectOption
 }{}
 
 func init() {
-	coordinatorCmd.Flags().StringVar(&cdCfg.StsNamespace, "sts-namespace", "", "namespace of target shard StatefulSets")
-	coordinatorCmd.Flags().StringVar(&cdCfg.StsSelector, "sts-selector", "app.kubernetes.io/name=prometheus", "label selector for select target StatefulSets")
-	coordinatorCmd.Flags().IntVar(&cdCfg.StsPort, "sts-port", 8080, "the port of shard client")
-	coordinatorCmd.Flags().DurationVar(&cdCfg.MaxIdleDuration, "max-idle", time.Hour*3, "the wait time before idle instance been deleted")
-	coordinatorCmd.Flags().Int64Var(&cdCfg.MaxSeries, "max-series", 1000000, "max series of per shard")
-	coordinatorCmd.Flags().Int32Var(&cdCfg.MaxShard, "max-shard", 999999, "max shard number")
-	coordinatorCmd.Flags().IntVar(&cdCfg.MaxExploreCon, "max-concurrence", 50, "max explore concurrence")
-	coordinatorCmd.Flags().StringVar(&cdCfg.WebAddress, "listen-address", ":9090", "server bind address")
-	coordinatorCmd.Flags().StringVar(&cdCfg.ConfigFile, "config-file", "prometheus.yml", "config file path")
-	coordinatorCmd.Flags().DurationVar(&cdCfg.SyncInterval, "sync-interval", time.Second*10, "the interval of coordinator loop")
+	coordinatorCmd.Flags().StringVar(&cdCfg.shardNamespace, "shard.namespace", "", "namespace of target shard StatefulSets")
+	coordinatorCmd.Flags().StringVar(&cdCfg.shardSelector, "shard.selector", "app.kubernetes.io/name=prometheus", "label selector for select target StatefulSets")
+	coordinatorCmd.Flags().IntVar(&cdCfg.shardPort, "shard.port", 8080, "the port of shard client")
+	coordinatorCmd.Flags().Int64Var(&cdCfg.shardMaxSeries, "shard.max-series", 1000000, "max series of per shard")
+	coordinatorCmd.Flags().Int32Var(&cdCfg.shadMaxShard, "shard.max-shard", 999999, "max shard number")
+	coordinatorCmd.Flags().IntVar(&cdCfg.exploreMaxCon, "explore.concurrence", 50, "max explore concurrence")
+	coordinatorCmd.Flags().StringVar(&cdCfg.webAddress, "web.address", ":9090", "server bind address")
+	coordinatorCmd.Flags().StringVar(&cdCfg.configFile, "config.file", "prometheus.yml", "config file path")
+	coordinatorCmd.Flags().DurationVar(&cdCfg.syncInterval, "coordinator.interval", time.Second*10, "the interval of coordinator loop")
+
+	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.url, "inject.kubernetes-url", "", "config file path")
+	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.token, "inject.kubernetes-token", "", "config file path")
+	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.proxy, "inject.kubernetes-proxy", "", "config file path")
+
 	rootCmd.AddCommand(coordinatorCmd)
 }
 
@@ -83,50 +98,165 @@ distribution targets to shards`,
 			return err
 		}
 
+		level := &promlog.AllowedLevel{}
+		level.Set("info")
+		format := &promlog.AllowedFormat{}
+		format.Set("logfmt")
 		var (
-			lg  = log.New()
-			tar = coordinator.NewDefTargetManager(cdCfg.MaxExploreCon, log.WithField("component", "target manager"))
-			ins = shardmanager.NewStatefulSet(cli, cdCfg.StsNamespace,
-				cdCfg.StsSelector,
-				cdCfg.StsPort,
-				log.WithField("component", "shard manager"))
-			balancer = coordinator.NewDefBalancer(cdCfg.MaxSeries, cdCfg.MaxShard, tar, log.WithField("component", "balance"))
+			lg = logrus.New()
 
-			cd = coordinator.NewCoordinator(ins,
-				balancer.ReBalance,
-				cdCfg.SyncInterval,
-				log.WithField("component", "coordinator"))
+			logger = promlog.New(&promlog.Config{
+				Level:  level,
+				Format: format,
+			})
 
-			wb = coordinator.NewWeb(func() (bytes []byte, e error) {
-				return ioutil.ReadFile(cdCfg.ConfigFile)
-			}, log.WithField("component", "web"))
+			scrapeManager          = scrape.New()
+			discoveryManagerScrape = prom_discovery.NewManager(context.Background(), log.With(logger, "component", "discovery manager scrape"), prom_discovery.Name("scrape"))
+			targetDiscovery        = discovery.New(lg.WithField("component", "target discovery"))
+			exp                    = explore.New(scrapeManager, lg.WithField("component", "explore"))
+
+			ins = k8s_shard.New(cli, cdCfg.shardNamespace,
+				cdCfg.shardSelector,
+				cdCfg.shardPort,
+				lg.WithField("component", "shard manager"))
+
+			cd = coordinator.NewCoordinator(
+				ins,
+				exp,
+				targetDiscovery,
+				cdCfg.shardMaxSeries,
+				cdCfg.shadMaxShard,
+				cdCfg.syncInterval,
+				lg.WithField("component", "coordinator"))
+
+			api = coordinator.NewAPI(
+				func() (bytes []byte, e error) {
+					return ioutil.ReadFile(cdCfg.configFile)
+				},
+				func(targets map[string][]*discovery.SDTargets) (statuses map[uint64]*target.ScrapeStatus, e error) {
+					return getTargetStatus(ins, exp, targets)
+				},
+				targetDiscovery,
+				lg.WithField("component", "web"),
+			)
 		)
 
 		g := errgroup.Group{}
 		ctx := context.Background()
 
-		g.Go(func() error {
-			return cd.Run(ctx)
-		})
+		configReload := make(chan struct{})
+		configInit := false
+		sdReload := make(chan struct{})
+		sdReloadInit := false
 
 		g.Go(func() error {
-			return wb.Run(cdCfg.WebAddress)
-		})
+			return reloadConfig(ctx, &cdCfg.configInject, api.ConfigReload, lg, []func(cfg *config.Config) error{
+				scrapeManager.ApplyConfig,
+				exp.ApplyConfig,
+				targetDiscovery.ApplyConfig,
+				func(cfg *config.Config) error {
+					c := make(map[string]sd_config.ServiceDiscoveryConfig)
+					for _, v := range cfg.ScrapeConfigs {
+						c[v.JobName] = v.ServiceDiscoveryConfig
+					}
+					return discoveryManagerScrape.ApplyConfig(c)
+				},
+				func(cfg *config.Config) error {
+					if !configInit {
+						close(configReload)
+						configInit = true
+					}
 
-		g.Go(func() error {
-			return tar.Run(ctx)
-		})
-
-		g.Go(func() error {
-			return reloadConfig(ctx, wb.ConfigReload, lg, []func(cfg *config.Config) error{
-				tar.ApplyConfig,
+					lg.Infof("config reload completed")
+					return nil
+				},
 			})
 		})
 
 		g.Go(func() error {
-			return initConfig(ctx, wb.ConfigReload, lg)
+			<-configReload
+			lg.Infof("SD start")
+			return discoveryManagerScrape.Run()
 		})
 
+		g.Go(func() error {
+			<-configReload
+			<-sdReload
+			lg.Infof("coordinator start")
+
+			return cd.Run(ctx)
+		})
+
+		g.Go(func() error {
+			<-configReload
+			<-sdReload
+			lg.Infof("api start at %s", cdCfg.webAddress)
+			return api.Run(cdCfg.webAddress)
+		})
+
+		g.Go(func() error {
+			<-configReload
+			lg.Infof("explore start")
+			return exp.Run(ctx, cdCfg.exploreMaxCon)
+		})
+
+		g.Go(func() error {
+			<-configReload
+			lg.Infof("explore start")
+			return targetDiscovery.Run(ctx, discoveryManagerScrape.SyncCh())
+		})
+
+		g.Go(func() error {
+			for {
+				ts := <-targetDiscovery.ActiveTargetsChan()
+				exp.UpdateTargets(ts)
+				if !sdReloadInit {
+					close(sdReload)
+					sdReloadInit = true
+				}
+			}
+		})
+
+		api.ConfigReload <- initConfig(cdCfg.configFile)
 		return g.Wait()
 	},
+}
+
+func getTargetStatus(manager shard.Manager, exp *explore.Explore, targets map[string][]*discovery.SDTargets) (statuses map[uint64]*target.ScrapeStatus, e error) {
+	shards, err := manager.Shards()
+	if err != nil {
+		return nil, err
+	}
+
+	global := map[uint64]*target.ScrapeStatus{}
+	l := sync.Mutex{}
+	g := errgroup.Group{}
+	for _, s := range shards {
+		g.Go(func() error {
+			res, err := s.TargetStatus()
+			if err != nil {
+				return err
+			}
+			l.Lock()
+			defer l.Unlock()
+			for hash, v := range res {
+				global[hash] = v
+			}
+			return nil
+		})
+	}
+
+	ret := map[uint64]*target.ScrapeStatus{}
+	for job, ts := range targets {
+		for _, t := range ts {
+			hash := t.ShardTarget.Hash
+			rt := global[hash]
+			if rt == nil {
+				rt = exp.Get(job, hash)
+			}
+			ret[hash] = rt
+		}
+	}
+
+	return ret, nil
 }

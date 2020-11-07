@@ -25,4 +25,7 @@ data:
         regex: (.*)
         replacement: ${1}:9091
         target_label: __address__
+      - source_labels:
+        - __meta_kubernetes_pod_name
+        target_label: pod
 

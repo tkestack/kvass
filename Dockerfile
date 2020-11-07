@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM byrnedo/alpine-curl
 COPY kvass /kvass
 
 ENTRYPOINT ["/kvass"]

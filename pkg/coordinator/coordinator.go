@@ -19,42 +19,48 @@ package coordinator
 
 import (
 	"context"
-	"time"
-
 	"github.com/pkg/errors"
-
+	"github.com/prometheus/prometheus/scrape"
 	"golang.org/x/sync/errgroup"
+	"time"
+	"tkestack.io/kvass/pkg/shard"
+	"tkestack.io/kvass/pkg/target"
 
 	"github.com/sirupsen/logrus"
-	"tkestack.io/kvass/pkg/shard"
 )
 
-// ShardsManager manage all Shard and Shards, it create or delete Shards
-type ShardsManager interface {
-	// Shards return current Shards in the cluster
-	Shards() ([]shard.Client, error)
-	// ChangeScale create or delete Shards according to "expReplicate"
-	ChangeScale(expReplicate int32) error
+type Explore interface {
+	Get(job string, hash uint64) *target.ScrapeStatus
 }
 
-// Coordinator periodically re balance all shards
+// Coordinator periodically re balance all replicates
 type Coordinator struct {
-	shardManager ShardsManager
-	reBalance    func(rt []*shard.RuntimeInfo) int32
-	log          logrus.FieldLogger
-	period       time.Duration
+	log             logrus.FieldLogger
+	shardManager    shard.Manager
+	explore         Explore
+	targetDiscovery TargetDiscovery
+	maxSeries       int64
+	maxShard        int32
+	period          time.Duration
 }
 
 // NewCoordinator create a new coordinator service
-func NewCoordinator(s ShardsManager,
-	reBalance func(rt []*shard.RuntimeInfo) int32,
+func NewCoordinator(
+	shardManager shard.Manager,
+	explore Explore,
+	targetDiscovery TargetDiscovery,
+	maxSeries int64,
+	maxShard int32,
 	period time.Duration,
 	log logrus.FieldLogger) *Coordinator {
 	return &Coordinator{
-		shardManager: s,
-		reBalance:    reBalance,
-		log:          log,
-		period:       period,
+		shardManager:    shardManager,
+		explore:         explore,
+		targetDiscovery: targetDiscovery,
+		maxShard:        maxShard,
+		maxSeries:       maxSeries,
+		log:             log,
+		period:          period,
 	}
 }
 
@@ -73,72 +79,144 @@ func (c *Coordinator) Run(ctx context.Context) error {
 	}
 }
 
+type shardInfo struct {
+	shard      *shard.Shard
+	runtime    *shard.RuntimeInfo
+	scraping   map[uint64]bool
+	newTargets map[string][]*target.Target
+}
+
 func (c *Coordinator) runOnce() error {
-	groups, err := c.shardManager.Shards()
+	shards, err := c.shardManager.Shards()
 	if err != nil {
 		return errors.Wrapf(err, "Shards")
 	}
 
-	rt, err := c.globalRuntimeInfo(groups)
-	if err != nil {
-		return errors.Wrapf(err, "get global runtime info failed")
+	shardsInfo := c.getShardsInfo(shards)
+	scraping := c.globalScraping(shardsInfo)
+	needSpace := int64(0)
+	for job, ts := range c.targetDiscovery.ActiveTargets() {
+		for _, target := range ts {
+			t := target.ShardTarget
+			sd := scraping[t.Hash]
+			// target is scraping by sd
+			if sd != nil {
+				sd.newTargets[job] = append(sd.newTargets[job], t)
+				continue
+			}
+
+			// if no shard scraping this target, we try assign it
+			exp := c.explore.Get(job, t.Hash)
+			if exp == nil {
+				c.log.Error("can not found target %d from explore", t.Hash)
+				continue
+			}
+
+			// this target is explored, assign it
+			if exp.Health == scrape.HealthGood {
+				found := false
+				if exp.Series > c.maxSeries {
+					c.log.Errorf("target too big %s (%d)", t.NoParamURL(), exp.Series)
+					continue
+				}
+				for _, s := range shardsInfo {
+					if s.runtime.HeadSeries+exp.Series < c.maxSeries {
+						s.runtime.HeadSeries += exp.Series
+						t.Series = exp.Series
+						s.newTargets[job] = append(s.newTargets[job], t)
+						found = true
+						break
+					}
+				}
+
+				if !found {
+					needSpace += exp.Series
+				}
+			}
+		}
+	}
+	c.applyShardsInfo(shardsInfo)
+	exp := int32(len(shardsInfo))
+	if needSpace > 0 {
+		exp += int32(needSpace/c.maxSeries + 1)
+		c.log.Infof("need space %d need exp = %d", needSpace, int32(needSpace/c.maxSeries+1))
 	}
 
-	replicate := c.reBalance(filterHealthyRuntime(rt))
-	if err := c.applyRuntimeInfo(groups, rt); err != nil {
-		return errors.Wrap(err, "sync")
+	if exp > c.maxShard {
+		c.log.Warnf("expect scale is %d but the max is %d", exp, c.maxShard)
+		exp = c.maxShard
 	}
 
-	return c.shardManager.ChangeScale(replicate)
+	return c.shardManager.ChangeScale(exp)
 }
 
-func filterHealthyRuntime(rt []*shard.RuntimeInfo) []*shard.RuntimeInfo {
-	ret := make([]*shard.RuntimeInfo, 0)
-	for _, r := range rt {
+func (c *Coordinator) globalScraping(info []*shardInfo) map[uint64]*shardInfo {
+	ret := map[uint64]*shardInfo{}
+	for _, s := range info {
+		for k := range s.scraping {
+			if ret[k] != nil {
+				c.log.Warnf("target (%d) is already scraping by %s when %s mark global scraping",
+					k, ret[k].shard.ID, s.shard.ID,
+				)
+				continue
+			}
+			ret[k] = s
+		}
+	}
+
+	return ret
+}
+
+func (c *Coordinator) getShardsInfo(shards []*shard.Shard) []*shardInfo {
+	all := make([]*shardInfo, len(shards))
+	g := errgroup.Group{}
+	for index, tmp := range shards {
+		s := tmp
+		i := index
+		g.Go(func() (err error) {
+			si := &shardInfo{
+				shard:      s,
+				newTargets: map[string][]*target.Target{},
+			}
+
+			si.runtime, err = s.RuntimeInfo()
+			if err != nil {
+				c.log.Error(err.Error())
+				return err
+			}
+
+			si.scraping, err = s.TargetsScraping()
+			if err != nil {
+				c.log.Error(err.Error())
+				return err
+			}
+			all[i] = si
+			return nil
+		})
+	}
+	_ = g.Wait()
+
+	ret := make([]*shardInfo, 0)
+	for _, r := range all {
 		if r != nil {
 			ret = append(ret, r)
 		}
 	}
+
 	return ret
 }
 
-func (c *Coordinator) globalRuntimeInfo(gs []shard.Client) ([]*shard.RuntimeInfo, error) {
-	var (
-		rt  = make([]*shard.RuntimeInfo, len(gs))
-		err error
-	)
-
-	wait := errgroup.Group{}
-	for i, g := range gs {
-		index := i
-		group := g
-
-		wait.Go(func() error {
-			rt[index], err = group.RuntimeInfo()
-			if err != nil {
-				c.log.Errorf(err.Error())
+func (c *Coordinator) applyShardsInfo(shards []*shardInfo) {
+	g := errgroup.Group{}
+	for _, tmp := range shards {
+		s := tmp
+		g.Go(func() (err error) {
+			if err := s.shard.UpdateTarget(s.newTargets); err != nil {
+				c.log.Error(err.Error())
+				return err
 			}
 			return nil
 		})
 	}
-	_ = wait.Wait()
-	return rt, nil
-}
-
-func (c *Coordinator) applyRuntimeInfo(gs []shard.Client, rt []*shard.RuntimeInfo) error {
-	wait := errgroup.Group{}
-	for i := range gs {
-		index := i
-		if rt[i] == nil {
-			continue
-		}
-		wait.Go(func() error {
-			err := gs[index].UpdateRuntimeInfo(rt[index])
-			if err != nil {
-				c.log.Errorf(err.Error())
-			}
-			return nil
-		})
-	}
-	return wait.Wait()
+	_ = g.Wait()
 }

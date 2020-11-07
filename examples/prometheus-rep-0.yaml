@@ -69,8 +69,8 @@ spec:
               name: config
         - name: kvass
           args:
-            - shard
-          image: tkestack/kvass:v0.0.1
+            - sidecar
+          image: ccr.ccs.tencentyun.com/tkeimages/kvass:v0.0.1
           imagePullPolicy: Always
           resources:
             limits:

@@ -34,3 +34,14 @@ func RunUntil(ctx context.Context, interval time.Duration, fc func()) {
 		time.Sleep(interval)
 	}
 }
+
+// RunEvent run fc when event chan receive data
+func RunEvent(ctx context.Context, event chan struct{}, fc func()) {
+	for {
+		select {
+		case <-ctx.Done():
+		case <-event:
+			fc()
+		}
+	}
+}

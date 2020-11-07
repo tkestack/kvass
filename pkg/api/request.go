@@ -49,7 +49,7 @@ func Post(url string, req interface{}, ret interface{}) (err error) {
 func Get(url string, ret interface{}) error {
 	resp, err := http.Get(url)
 	if err != nil {
-		return errors.Wrapf(err, "get runtimeinfo from prometheus")
+		return errors.Wrapf(err, "http get")
 	}
 	defer func() { _ = resp.Body.Close() }()
 	return dealResp(resp, ret)
@@ -64,7 +64,6 @@ func dealResp(resp *http.Response, ret interface{}) error {
 	if err != nil {
 		return errors.Wrapf(err, "read data")
 	}
-
 	if ret != nil {
 		commonResp := Data(ret)
 		if err := json.Unmarshal(data, commonResp); err != nil {
