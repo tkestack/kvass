@@ -46,9 +46,6 @@ spec:
             - --shard.selector=app.kubernetes.io/name=prometheus
             - --shard.namespace=$(NAMESPACE)
             - --config.file=/etc/prometheus/config_out/prometheus.env.yaml
-            - --inject.kubernetes-url=https://kubernetes.default.svc:443
-            - --inject.kubernetes-token=xxx
-            - --inject.kubernetes-proxy=http://10.0.1.133:8008
           env:
             - name: NAMESPACE
               valueFrom:

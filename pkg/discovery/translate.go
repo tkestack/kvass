@@ -141,7 +141,7 @@ func targetsFromGroup(tg *targetgroup.Group, cfg *config.ScrapeConfig) ([]*SDTar
 				PromTarget: tar,
 				ShardTarget: &target.Target{
 					Hash:   targetHash(lbls, tar.URL().String()),
-					Labels: labelsWithoutConfigParam(lbls, cfg.Params),
+					Labels: supportInvalidLabelName(labelsWithoutConfigParam(lbls, cfg.Params)),
 				},
 			})
 		}
@@ -158,7 +158,7 @@ func targetHash(lbls labels.Labels, url string) uint64 {
 	return h.Sum64()
 }
 
-// some config param si not valid as label values
+// some config param is not valid as label values
 // but populateLabels will add all config param into labels
 // must delete them from label set
 func labelsWithoutConfigParam(lbls labels.Labels, param url.Values) labels.Labels {
@@ -174,4 +174,18 @@ func labelsWithoutConfigParam(lbls labels.Labels, param url.Values) labels.Label
 		}
 	}
 	return newlbls
+}
+
+// some label's name is invalid but we do need it
+// add prefix string to valid it
+// sidecar should add relabel_configs to remove prefix
+func supportInvalidLabelName(lbls labels.Labels) labels.Labels {
+	res := labels.Labels{}
+	for _, l := range lbls {
+		if !model.LabelName(l.Name).IsValid() {
+			l.Name = target.PrefixForInvalidLabelName + l.Name
+		}
+		res = append(res, l)
+	}
+	return res
 }

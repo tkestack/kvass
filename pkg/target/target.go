@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+const (
+	// PrefixForInvalidLabelName is a prefix string for mark invalid label name become valid
+	PrefixForInvalidLabelName = model.ReservedLabelPrefix + "invalid_label_"
+)
+
 // Target is a target generate prometheus config
 type Target struct {
 	// Hash is calculated from origin labels before relabel_configs process and the URL of this target

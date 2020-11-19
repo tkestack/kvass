@@ -202,7 +202,7 @@ distribution targets to shards`,
 
 		g.Go(func() error {
 			<-configReload
-			lg.Infof("explore start")
+			lg.Infof("targetDiscovery start")
 			return targetDiscovery.Run(ctx, discoveryManagerScrape.SyncCh())
 		})
 

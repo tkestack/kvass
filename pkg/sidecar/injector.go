@@ -125,7 +125,15 @@ func (i *Injector) UpdateConfig() error {
 			password = append(password, string(job.HTTPClientConfig.BasicAuth.Password))
 		}
 
-		job.RelabelConfigs = []*relabel.Config{}
+		// fix invalid label
+		job.RelabelConfigs = []*relabel.Config{
+			{
+				Separator:   ";",
+				Regex:       relabel.MustNewRegexp(target.PrefixForInvalidLabelName + "(.+)"),
+				Replacement: "$1",
+				Action:      relabel.LabelMap,
+			},
+		}
 	}
 
 	gen, err := yaml.Marshal(&cfg)
