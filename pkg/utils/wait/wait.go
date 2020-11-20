@@ -19,18 +19,22 @@ package wait
 
 import (
 	"context"
+	"github.com/sirupsen/logrus"
 	"time"
 )
 
 // RunUntil run fc period until ctx is done
-func RunUntil(ctx context.Context, interval time.Duration, fc func()) {
+func RunUntil(ctx context.Context, log logrus.FieldLogger, interval time.Duration, fc func() error) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		default:
 		}
-		fc()
+
+		if err := fc(); err != nil {
+			log.Errorf(err.Error())
+		}
 		time.Sleep(interval)
 	}
 }

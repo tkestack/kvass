@@ -21,7 +21,7 @@ func TestManager(t *testing.T) {
 	cfg.ScrapeTimeout = model.Duration(time.Second)
 	r.NoError(os.Setenv("SCRAPE_PROXY", "http://127.0.0.1:9090"))
 
-	ss := &Manager{}
+	ss := New()
 	r.NoError(ss.ApplyConfig(&config.Config{ScrapeConfigs: []*config.ScrapeConfig{cfg}}))
 	s := ss.GetJob(cfg.JobName)
 	r.NotNil(s)

@@ -20,6 +20,9 @@ type ScrapeStatus struct {
 	lastSeries []int64
 }
 
+// SetScrapeErr mark the result of this scraping
+// health will be down if err is not nil
+// health will be up if err is nil
 func (t *ScrapeStatus) SetScrapeErr(start time.Time, err error) {
 	t.LastScrape = start
 	t.LastScrapeDuration = time.Now().Sub(start).Seconds()

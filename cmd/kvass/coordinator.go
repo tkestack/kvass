@@ -122,11 +122,11 @@ distribution targets to shards`,
 
 			cd = coordinator.NewCoordinator(
 				ins,
-				exp,
-				targetDiscovery,
 				cdCfg.shardMaxSeries,
 				cdCfg.shadMaxShard,
 				cdCfg.syncInterval,
+				exp.Get,
+				targetDiscovery.ActiveTargets,
 				lg.WithField("component", "coordinator"))
 
 			api = coordinator.NewAPI(
@@ -136,7 +136,8 @@ distribution targets to shards`,
 				func(targets map[string][]*discovery.SDTargets) (statuses map[uint64]*target.ScrapeStatus, e error) {
 					return getTargetStatus(ins, exp, targets)
 				},
-				targetDiscovery,
+				targetDiscovery.ActiveTargets,
+				targetDiscovery.DropTargets,
 				lg.WithField("component", "web"),
 			)
 		)

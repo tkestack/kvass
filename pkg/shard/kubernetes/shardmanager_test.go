@@ -62,7 +62,14 @@ func TestStatefulSet_Shards(t *testing.T) {
 	sts.getPods = func(lb map[string]string) (list *v1.PodList, e error) {
 		pl := &v1.PodList{}
 		for i := 0; i < 2; i++ {
-			pl.Items = append(pl.Items, v1.Pod{})
+			p := v1.Pod{}
+			p.Status.Conditions = []v1.PodCondition{
+				{
+					Type:   v1.PodReady,
+					Status: v1.ConditionTrue,
+				},
+			}
+			pl.Items = append(pl.Items, p)
 		}
 		return pl, nil
 	}

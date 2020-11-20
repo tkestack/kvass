@@ -33,38 +33,34 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// TargetDiscovery manager provide active targets and dropped targets
-type TargetDiscovery interface {
-	// ActiveTargets return global active targets from SD
-	ActiveTargets() map[string][]*discovery.SDTargets
-	// DropTargets return global dropped targets from SD
-	DropTargets() map[string][]*discovery.SDTargets
-}
-
 // API is the api server of coordinator
 type API struct {
 	// gin.Engine is the gin engine for handle http request
 	*gin.Engine
-	ConfigReload    chan *config.Config
-	lg              logrus.FieldLogger
-	readConfig      func() ([]byte, error)
-	getScrapeStatus func(map[string][]*discovery.SDTargets) (map[uint64]*target.ScrapeStatus, error)
-	targetDiscovery TargetDiscovery
+	ConfigReload chan *config.Config
+	lg           logrus.FieldLogger
+
+	readConfig       func() ([]byte, error)
+	getScrapeStatus  func(map[string][]*discovery.SDTargets) (map[uint64]*target.ScrapeStatus, error)
+	getActiveTargets func() map[string][]*discovery.SDTargets
+	getDropTargets   func() map[string][]*discovery.SDTargets
 }
 
 // NewAPI return a new web server
 func NewAPI(
 	readConfig func() ([]byte, error),
 	getScrapeStatus func(map[string][]*discovery.SDTargets) (map[uint64]*target.ScrapeStatus, error),
-	targetDiscovery TargetDiscovery,
+	getActiveTargets func() map[string][]*discovery.SDTargets,
+	getDropTargets func() map[string][]*discovery.SDTargets,
 	lg logrus.FieldLogger) *API {
 	w := &API{
-		ConfigReload:    make(chan *config.Config, 2),
-		Engine:          gin.Default(),
-		lg:              lg,
-		readConfig:      readConfig,
-		getScrapeStatus: getScrapeStatus,
-		targetDiscovery: targetDiscovery,
+		ConfigReload:     make(chan *config.Config, 2),
+		Engine:           gin.Default(),
+		lg:               lg,
+		readConfig:       readConfig,
+		getScrapeStatus:  getScrapeStatus,
+		getActiveTargets: getActiveTargets,
+		getDropTargets:   getDropTargets,
 	}
 
 	w.GET("/api/v1/targets", api.Wrap(lg, w.targets))
@@ -77,6 +73,8 @@ func NewAPI(
 	return w
 }
 
+// targets compatible of prometheus API /api/v1/targets
+// targets combines targets information from service discovery, sidecar and exploring
 func (a *API) targets(ctx *gin.Context) *api.Result {
 	state := ctx.Query("state")
 	sortKeys := func(targets map[string][]*discovery.SDTargets) ([]string, int) {
@@ -106,7 +104,7 @@ func (a *API) targets(ctx *gin.Context) *api.Result {
 	res := &v1.TargetDiscovery{}
 
 	if showActive {
-		activeTargets := a.targetDiscovery.ActiveTargets()
+		activeTargets := a.getActiveTargets()
 		activeKeys, numTargets := sortKeys(activeTargets)
 		res.ActiveTargets = make([]*v1.Target, 0, numTargets)
 		status, err := a.getScrapeStatus(activeTargets)
@@ -140,7 +138,7 @@ func (a *API) targets(ctx *gin.Context) *api.Result {
 		res.ActiveTargets = []*v1.Target{}
 	}
 	if showDropped {
-		tDropped := flatten(a.targetDiscovery.DropTargets())
+		tDropped := flatten(a.getDropTargets())
 		res.DroppedTargets = make([]*v1.DroppedTarget, 0, len(tDropped))
 		for _, t := range tDropped {
 			res.DroppedTargets = append(res.DroppedTargets, &v1.DroppedTarget{

@@ -19,6 +19,7 @@ package wait
 
 import (
 	"context"
+	"github.com/sirupsen/logrus"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,9 +28,10 @@ import (
 func TestRunUntil(t *testing.T) {
 	called := false
 	ctx, cancel := context.WithCancel(context.Background())
-	RunUntil(ctx, 0, func() {
+	_ = RunUntil(ctx, logrus.New(), 0, func() error {
 		called = true
 		cancel()
+		return nil
 	})
 	require.True(t, called)
 }

@@ -23,6 +23,7 @@ import (
 	v1 "github.com/prometheus/prometheus/web/api/v1"
 )
 
+// Client is a client to do prometheus API request
 type Client struct {
 	url string
 }
@@ -34,14 +35,14 @@ func NewClient(url string) *Client {
 	}
 }
 
-// runtimeInfo return the current status of this shard, only return tManager targets if scrapingOnly is true,
+// RuntimeInfo return the current status of this shard, only return tManager targets if scrapingOnly is true,
 // otherwise ,all target this cli discovered will be returned
 func (c *Client) RuntimeInfo() (*RuntimeInfo, error) {
 	ret := &RuntimeInfo{}
 	return ret, api.Get(c.url+"/api/v1/status/runtimeinfo", ret)
 }
 
-// targets is compatible with prometheusURL /api/v1/targets
+// Targets is compatible with prometheusURL /api/v1/targets
 // the origin prometheusURL's Config is injected, so the targets it report must be adjusted by cli sidecar
 func (c *Client) Targets(state string) (*v1.TargetDiscovery, error) {
 	url := c.url + "/api/v1/targets"

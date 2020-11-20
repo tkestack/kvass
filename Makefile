@@ -27,4 +27,5 @@ build: dep ## Build the binary file
 	@go build -i -o build/kvass cmd/kvass/*.go
 
 clean: ## Remove previous build
-	@rm -f ./build
+	@rm -fr ./build
+	@rm -fr cover.out coverage.txt

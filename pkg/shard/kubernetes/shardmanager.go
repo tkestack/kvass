@@ -45,7 +45,7 @@ type ShardManager struct {
 	getPods         func(lb map[string]string) (*v1.PodList, error)
 }
 
-// NewShard create a new ShardManager shards manager
+// New create a new StatefulSet shards manager
 func New(cli kubernetes.Interface,
 	stsNamespace string,
 	stsSelector string,
@@ -95,7 +95,7 @@ func (s *ShardManager) Shards() ([]*shard.Shard, error) {
 
 	ret := make([]*shard.Shard, 0)
 	for i := 0; i < maxPods; i++ {
-		sg := shard.NewShard(fmt.Sprintf("shard-%d", i), s.lg.WithField("shard", i))
+		sg := shard.NewGroup(fmt.Sprintf("shard-%d", i), s.lg.WithField("shard", i))
 		for _, pods := range podss {
 			if i < len(pods) {
 				p := pods[i]

@@ -72,6 +72,7 @@ func (w *API) ServeHTTP(wt http.ResponseWriter, r *http.Request) {
 	httputil.NewSingleHostReverseProxy(u).ServeHTTP(wt, r)
 }
 
+// Run start API at "address"
 func (w *API) Run(address string) error {
 	return http.ListenAndServe(address, w)
 }

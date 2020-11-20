@@ -23,60 +23,49 @@ import (
 	"github.com/prometheus/prometheus/scrape"
 	"golang.org/x/sync/errgroup"
 	"time"
+	"tkestack.io/kvass/pkg/discovery"
 	"tkestack.io/kvass/pkg/shard"
 	"tkestack.io/kvass/pkg/target"
+	"tkestack.io/kvass/pkg/utils/wait"
 
 	"github.com/sirupsen/logrus"
 )
 
-type Explore interface {
-	Get(job string, hash uint64) *target.ScrapeStatus
-}
-
 // Coordinator periodically re balance all replicates
 type Coordinator struct {
-	log             logrus.FieldLogger
-	shardManager    shard.Manager
-	explore         Explore
-	targetDiscovery TargetDiscovery
-	maxSeries       int64
-	maxShard        int32
-	period          time.Duration
+	log          logrus.FieldLogger
+	shardManager shard.Manager
+	maxSeries    int64
+	maxShard     int32
+	period       time.Duration
+
+	getExploreResult func(job string, hash uint64) *target.ScrapeStatus
+	getActive        func() map[string][]*discovery.SDTargets
 }
 
 // NewCoordinator create a new coordinator service
 func NewCoordinator(
 	shardManager shard.Manager,
-	explore Explore,
-	targetDiscovery TargetDiscovery,
 	maxSeries int64,
 	maxShard int32,
 	period time.Duration,
+	getExploreResult func(job string, hash uint64) *target.ScrapeStatus,
+	getActive func() map[string][]*discovery.SDTargets,
 	log logrus.FieldLogger) *Coordinator {
 	return &Coordinator{
-		shardManager:    shardManager,
-		explore:         explore,
-		targetDiscovery: targetDiscovery,
-		maxShard:        maxShard,
-		maxSeries:       maxSeries,
-		log:             log,
-		period:          period,
+		shardManager:     shardManager,
+		getExploreResult: getExploreResult,
+		getActive:        getActive,
+		maxShard:         maxShard,
+		maxSeries:        maxSeries,
+		log:              log,
+		period:           period,
 	}
 }
 
 // Run do coordinate periodically until ctx done
 func (c *Coordinator) Run(ctx context.Context) error {
-	tk := time.NewTicker(c.period)
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-tk.C:
-			if err := c.runOnce(); err != nil {
-				c.log.Errorf(err.Error())
-			}
-		}
-	}
+	return wait.RunUntil(ctx, c.log, c.period, c.RunOnce)
 }
 
 type shardInfo struct {
@@ -86,7 +75,9 @@ type shardInfo struct {
 	newTargets map[string][]*target.Target
 }
 
-func (c *Coordinator) runOnce() error {
+// RunOnce get shards information from shard manager,
+// do shard reBalance and change expect shard number
+func (c *Coordinator) RunOnce() error {
 	shards, err := c.shardManager.Shards()
 	if err != nil {
 		return errors.Wrapf(err, "Shards")
@@ -94,8 +85,20 @@ func (c *Coordinator) runOnce() error {
 
 	shardsInfo := c.getShardsInfo(shards)
 	scraping := c.globalScraping(shardsInfo)
+	exp, err := c.reBalance(shardsInfo, scraping)
+	if err != nil {
+		return errors.Wrapf(err, "reBalance")
+	}
+
+	return c.shardManager.ChangeScale(exp)
+}
+
+func (c *Coordinator) reBalance(
+	shardsInfo []*shardInfo,
+	scraping map[uint64]*shardInfo,
+) (int32, error) {
 	needSpace := int64(0)
-	for job, ts := range c.targetDiscovery.ActiveTargets() {
+	for job, ts := range c.getActive() {
 		for _, target := range ts {
 			t := target.ShardTarget
 			sd := scraping[t.Hash]
@@ -106,7 +109,7 @@ func (c *Coordinator) runOnce() error {
 			}
 
 			// if no shard scraping this target, we try assign it
-			exp := c.explore.Get(job, t.Hash)
+			exp := c.getExploreResult(job, t.Hash)
 			if exp == nil {
 				c.log.Error("can not found target %d from explore", t.Hash)
 				continue
@@ -147,7 +150,7 @@ func (c *Coordinator) runOnce() error {
 		exp = c.maxShard
 	}
 
-	return c.shardManager.ChangeScale(exp)
+	return exp, nil
 }
 
 func (c *Coordinator) globalScraping(info []*shardInfo) map[uint64]*shardInfo {

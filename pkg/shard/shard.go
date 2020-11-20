@@ -28,8 +28,8 @@ type Shard struct {
 	replicates []*Replicas
 }
 
-// NewShard return a new shard with no replicate
-func NewShard(id string, lg logrus.FieldLogger) *Shard {
+// NewGroup return a new shard with no replicate
+func NewGroup(id string, lg logrus.FieldLogger) *Shard {
 	return &Shard{
 		ID:         id,
 		log:        lg,
@@ -47,7 +47,7 @@ func (s *Shard) Replicas() []*Replicas {
 	return s.replicates
 }
 
-// targetsScraping return the targets hash that this Shard scraping
+// TargetsScraping return the targets hash that this Shard scraping
 // the key of the map is target hash
 // the result is union set of all replicates
 func (s *Shard) TargetsScraping() (map[uint64]bool, error) {
