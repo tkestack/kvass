@@ -67,7 +67,7 @@ Coordinator use label selector to select shards StatefulSets, every StatefulSet 
 
 ## Build binary
 
-> git clone https://github.com/tkestack.io/kvass
+> git clone https://github.com/tkestack/kvass
 >
 > cd kvass
 >
