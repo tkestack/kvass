@@ -1,6 +1,6 @@
 # Kvass
 
-  [![Go Report Card](https://goreportcard.com/badge/github.com/tkestack/kvass)](https://goreportcard.com/report/github.com/tkestack/kvass)      [![Build](https://github.com/tkestack/kvass/workflows/Build/badge.svg?branch=master)]()
+  [![Go Report Card](https://goreportcard.com/badge/github.com/tkestack/kvass)](https://goreportcard.com/report/github.com/tkestack/kvass)    [![Build](https://github.com/tkestack/kvass/workflows/Build/badge.svg?branch=master)]()
 ------
 
 Kvass provides a method of Prometheus sharding, which uses Sidecar to generate new config only use "static_configs" for Prometheus scraping according to targets assigned from Coordinator
