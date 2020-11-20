@@ -18,8 +18,6 @@
 package prom
 
 import (
-	"fmt"
-
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/prometheus/config"
 	"gopkg.in/yaml.v2"
@@ -48,8 +46,6 @@ func APIReloadConfig(readConfig func() ([]byte, error), notify chan *config.Conf
 	if err != nil {
 		return api.InternalErr(err, "read config")
 	}
-
-	fmt.Println(string(data))
 
 	cfg := &config.Config{}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
