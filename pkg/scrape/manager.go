@@ -5,10 +5,9 @@ import (
 	"github.com/prometheus/prometheus/config"
 )
 
-// Manager includes all cli of all jobs
+// Manager includes all jobs
 type Manager struct {
-	Config *config.Config
-	jobs   map[string]*JobInfo
+	jobs map[string]*JobInfo
 }
 
 // New create a Manager with specified cli set

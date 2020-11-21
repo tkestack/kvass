@@ -4,16 +4,17 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"tkestack.io/kvass/pkg/shard"
-	"tkestack.io/kvass/pkg/target"
 
-	"tkestack.io/kvass/pkg/utils/types"
-
+	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/prometheus/config"
 	"github.com/sirupsen/logrus"
+
 	"tkestack.io/kvass/pkg/api"
 	"tkestack.io/kvass/pkg/prom"
+	"tkestack.io/kvass/pkg/shard"
+	"tkestack.io/kvass/pkg/target"
+	"tkestack.io/kvass/pkg/utils/types"
 )
 
 // API is the api server of shard
@@ -44,6 +45,7 @@ func NewAPI(
 		promCli:      prom.NewClient(promURL),
 		proxy:        proxy,
 	}
+	pprof.Register(w.Engine)
 
 	w.GET(w.path("/api/v1/shard/runtimeinfo/"), api.Wrap(w.lg, w.runtimeInfo))
 	w.GET(w.path("/api/v1/shard/targets/"), api.Wrap(w.lg, w.getTargets))

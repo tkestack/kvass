@@ -162,7 +162,7 @@ func targetHash(lbls labels.Labels, url string) uint64 {
 // but populateLabels will add all config param into labels
 // must delete them from label set
 func labelsWithoutConfigParam(lbls labels.Labels, param url.Values) labels.Labels {
-	key := make([]string, 0)
+	key := make([]string, 0, len(param))
 	for k := range param {
 		key = append(key, model.ParamLabelPrefix+k)
 	}
