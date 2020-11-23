@@ -4,7 +4,8 @@
 
 ------
 
-Kvass provides a method of Prometheus sharding, which uses Sidecar to generate new config only use "static_configs" for Prometheus scraping according to targets assigned from Coordinator
+Kvass provides a solution for Prometheus sharding, which uses Sidecar to generate new config only use "static_configs" for Prometheus scraping according to targets assigned from Coordinator.
+
 A Coordinator manage all shards  and assigned targets to each of them。
 Thanos (or other storage solution) is used to provide a global data view。
 
@@ -66,7 +67,7 @@ Coordinator use label selector to select shards StatefulSets, every StatefulSet 
 
 ## Build binary
 
-> git clone https://github.com/tkestack.io/kvass
+> git clone https://github.com/tkestack/kvass
 >
 > cd kvass
 >
