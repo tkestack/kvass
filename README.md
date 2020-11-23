@@ -9,7 +9,7 @@ Kvass provides a solution for Prometheus sharding, which uses Sidecar to generat
 A Coordinator manage all shards  and assigned targets to each of them。
 Thanos (or other storage solution) is used to provide a global data view。
 
-![image-20201123224137790](/Users/raylhuang/go/src/tkestack.io/kvass/README.assets/image-20201123224137790.png)
+![image-20201123224137790](./README.assets/image-20201123224137790.png)
 
 ------
 
