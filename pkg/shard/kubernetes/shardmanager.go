@@ -72,7 +72,7 @@ func New(cli kubernetes.Interface,
 }
 
 // Shards return current Shards in the cluster
-func (s *ShardManager) Shards() ([]*shard.Shard, error) {
+func (s *ShardManager) Shards() ([]*shard.Group, error) {
 	stss, err := s.getStatefulSets()
 	if err != nil {
 		return nil, err
@@ -93,7 +93,7 @@ func (s *ShardManager) Shards() ([]*shard.Shard, error) {
 		podss = append(podss, pods.Items)
 	}
 
-	ret := make([]*shard.Shard, 0)
+	ret := make([]*shard.Group, 0)
 	for i := 0; i < maxPods; i++ {
 		sg := shard.NewGroup(fmt.Sprintf("shard-%d", i), s.lg.WithField("shard", i))
 		for _, pods := range podss {

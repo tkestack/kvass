@@ -147,8 +147,6 @@ distribution targets to shards`,
 
 		configReload := make(chan struct{})
 		configInit := false
-		sdReload := make(chan struct{})
-		sdReloadInit := false
 
 		g.Go(func() error {
 			return reloadConfig(ctx, &cdCfg.configInject, api.ConfigReload, lg, []func(cfg *config.Config) error{
@@ -182,7 +180,6 @@ distribution targets to shards`,
 
 		g.Go(func() error {
 			<-configReload
-			<-sdReload
 			lg.Infof("coordinator start")
 
 			return cd.Run(ctx)
@@ -190,7 +187,6 @@ distribution targets to shards`,
 
 		g.Go(func() error {
 			<-configReload
-			<-sdReload
 			lg.Infof("api start at %s", cdCfg.webAddress)
 			return api.Run(cdCfg.webAddress)
 		})
@@ -211,10 +207,6 @@ distribution targets to shards`,
 			for {
 				ts := <-targetDiscovery.ActiveTargetsChan()
 				exp.UpdateTargets(ts)
-				if !sdReloadInit {
-					close(sdReload)
-					sdReloadInit = true
-				}
 			}
 		})
 

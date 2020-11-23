@@ -78,7 +78,7 @@ func TestTargets(t *testing.T) {
 
 	a := NewAPI(nil, getScrapeStatus, getActive, getDrop, logrus.New())
 	res := &v1.TargetDiscovery{}
-	r := api.TestCall(t, a.Engine, "/api/v1/targets", http.MethodGet, "", res)
+	r := api.TestCall(t, a.Engine.ServeHTTP, "/api/v1/targets", http.MethodGet, "", res)
 	r.Equal("http://127.0.0.1:80", res.ActiveTargets[0].ScrapeURL)
 	r.Equal("j1", res.ActiveTargets[0].ScrapePool)
 	r.Equal(scrape.HealthBad, res.ActiveTargets[0].Health)

@@ -1,3 +1,20 @@
+/*
+ * Tencent is pleased to support the open source community by making TKEStack available.
+ *
+ * Copyright (C) 2012-2019 Tencent. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+ * this file except in compliance with the License. You may obtain a copy of the
+ * License at
+ *
+ * https://opensource.org/licenses/Apache-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
+
 package shard
 
 import (
@@ -20,17 +37,17 @@ type RuntimeInfo struct {
 	IdleAt *time.Time `json:"idleAt,omitempty"`
 }
 
-// Shard is a shard instance contains one or more replicates
+// Group is a shard group contains one or more replicates
 // it knows how to communicate with shard sidecar and manager local scraping cache
-type Shard struct {
+type Group struct {
 	ID         string
 	log        logrus.FieldLogger
 	replicates []*Replicas
 }
 
 // NewGroup return a new shard with no replicate
-func NewGroup(id string, lg logrus.FieldLogger) *Shard {
-	return &Shard{
+func NewGroup(id string, lg logrus.FieldLogger) *Group {
+	return &Group{
 		ID:         id,
 		log:        lg,
 		replicates: []*Replicas{},
@@ -38,19 +55,19 @@ func NewGroup(id string, lg logrus.FieldLogger) *Shard {
 }
 
 // AddReplicas add a Replicas to this shard
-func (s *Shard) AddReplicas(r *Replicas) {
+func (s *Group) AddReplicas(r *Replicas) {
 	s.replicates = append(s.replicates, r)
 }
 
 // Replicas return all replicates of this shard
-func (s *Shard) Replicas() []*Replicas {
+func (s *Group) Replicas() []*Replicas {
 	return s.replicates
 }
 
-// TargetsScraping return the targets hash that this Shard scraping
+// TargetsScraping return the targets hash that this Group scraping
 // the key of the map is target hash
 // the result is union set of all replicates
-func (s *Shard) TargetsScraping() (map[uint64]bool, error) {
+func (s *Group) TargetsScraping() (map[uint64]bool, error) {
 	ret := map[uint64]bool{}
 	l := sync.Mutex{}
 	err := s.shardsDo(func(sd *Replicas) error {
@@ -74,8 +91,8 @@ func (s *Shard) TargetsScraping() (map[uint64]bool, error) {
 	return ret, nil
 }
 
-// RuntimeInfo return the runtime status of this Shard
-func (s *Shard) RuntimeInfo() (*RuntimeInfo, error) {
+// RuntimeInfo return the runtime status of this Group
+func (s *Group) RuntimeInfo() (*RuntimeInfo, error) {
 	ret := &RuntimeInfo{}
 	l := sync.Mutex{}
 	err := s.shardsDo(func(sd *Replicas) error {
@@ -98,8 +115,8 @@ func (s *Shard) RuntimeInfo() (*RuntimeInfo, error) {
 	return ret, nil
 }
 
-// TargetStatus return the target runtime status that Shard scraping
-func (s *Shard) TargetStatus() (map[uint64]*target.ScrapeStatus, error) {
+// TargetStatus return the target runtime status that Group scraping
+func (s *Group) TargetStatus() (map[uint64]*target.ScrapeStatus, error) {
 	ret := map[uint64]*target.ScrapeStatus{}
 	l := sync.Mutex{}
 	err := s.shardsDo(func(sd *Replicas) error {
@@ -121,16 +138,16 @@ func (s *Shard) TargetStatus() (map[uint64]*target.ScrapeStatus, error) {
 	return ret, nil
 }
 
-// UpdateTarget update the scraping targets of this Shard
+// UpdateTarget update the scraping targets of this Group
 // every Replicas will compare the new targets to it's targets scraping cache and decide if communicate with sidecar or not,
 // request will be send to sidecar only if new activeTargets not eq to the scraping
-func (s *Shard) UpdateTarget(targets map[string][]*target.Target) error {
+func (s *Group) UpdateTarget(targets map[string][]*target.Target) error {
 	return s.shardsDo(func(sd *Replicas) error {
 		return sd.updateTarget(targets)
 	})
 }
 
-func (s *Shard) shardsDo(f func(sd *Replicas) error) error {
+func (s *Group) shardsDo(f func(sd *Replicas) error) error {
 	g := errgroup.Group{}
 	success := false
 	for _, tsd := range s.replicates {

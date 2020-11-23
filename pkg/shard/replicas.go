@@ -1,3 +1,20 @@
+/*
+ * Tencent is pleased to support the open source community by making TKEStack available.
+ *
+ * Copyright (C) 2012-2019 Tencent. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+ * this file except in compliance with the License. You may obtain a copy of the
+ * License at
+ *
+ * https://opensource.org/licenses/Apache-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
+
 package shard
 
 import (
@@ -12,6 +29,12 @@ import (
 type Replicas struct {
 	// ID is the unique ID for differentiate different replicate of shard
 	ID string
+	// APIGet is a function to do stand api request to target
+	// exposed this field for user to writ unit testing easily
+	APIGet func(url string, ret interface{}) error
+	// APIPost is a function to do stand api request to target
+	// exposed this field for user to writ unit testing easily
+	APIPost func(url string, req interface{}, ret interface{}) (err error)
 	// scraping is a map that record the targets this Replicas scarping
 	// the key is target hash, scraping cache is invalid if it is nil
 	scraping map[uint64]bool
@@ -22,9 +45,11 @@ type Replicas struct {
 // NewReplicas create a Replicas with empty scraping cache
 func NewReplicas(id string, url string, log logrus.FieldLogger) *Replicas {
 	return &Replicas{
-		ID:  id,
-		url: url,
-		log: log,
+		ID:      id,
+		APIGet:  api.Get,
+		APIPost: api.Post,
+		url:     url,
+		log:     log,
 	}
 }
 
@@ -46,9 +71,9 @@ func (r *Replicas) targetsScraping() (map[uint64]bool, error) {
 func (r *Replicas) runtimeInfo() (*RuntimeInfo, error) {
 	res := &RuntimeInfo{}
 
-	err := api.Get(r.url+"/api/v1/shard/runtimeinfo/", &res)
+	err := r.APIGet(r.url+"/api/v1/shard/runtimeinfo/", &res)
 	if err != nil {
-		// Shard may be unhealthy, the activeTargets scraping should be reload
+		// Group may be unhealthy, the activeTargets scraping should be reload
 		r.scraping = nil
 		return nil, fmt.Errorf("get runtime info from %s failed : %s", r.ID, err.Error())
 	}
@@ -59,9 +84,9 @@ func (r *Replicas) runtimeInfo() (*RuntimeInfo, error) {
 func (r *Replicas) targetStatus() (map[uint64]*target.ScrapeStatus, error) {
 	res := map[uint64]*target.ScrapeStatus{}
 
-	err := api.Get(r.url+"/api/v1/shard/targets/", &res)
+	err := r.APIGet(r.url+"/api/v1/shard/targets/", &res)
 	if err != nil {
-		// Shard may be unhealthy, the activeTargets scraping should reload
+		// Group may be unhealthy, the activeTargets scraping should reload
 		r.scraping = nil
 		return nil, fmt.Errorf("get targets status info from %s failed : %s", r.ID, err.Error())
 	}
@@ -79,7 +104,7 @@ func (r *Replicas) updateTarget(targets map[string][]*target.Target) error {
 
 	if r.needUpdate(newCache) {
 		r.log.Infof("%s need update targets", r.ID)
-		if err := api.Post(r.url+"/api/v1/shard/targets/", &targets, nil); err != nil {
+		if err := r.APIPost(r.url+"/api/v1/shard/targets/", &targets, nil); err != nil {
 			return err
 		}
 		r.scraping = newCache

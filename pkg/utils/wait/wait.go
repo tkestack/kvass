@@ -38,14 +38,3 @@ func RunUntil(ctx context.Context, log logrus.FieldLogger, interval time.Duratio
 		time.Sleep(interval)
 	}
 }
-
-// RunEvent run fc when event chan receive data
-func RunEvent(ctx context.Context, event chan struct{}, fc func()) {
-	for {
-		select {
-		case <-ctx.Done():
-		case <-event:
-			fc()
-		}
-	}
-}

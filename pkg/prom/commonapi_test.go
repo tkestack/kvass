@@ -43,7 +43,7 @@ func TestApiReloadConfig(t *testing.T) {
 		}, c)
 	}))
 
-	_ = api.TestCall(t, e, "/-/reload", http.MethodPost, "", nil)
+	_ = api.TestCall(t, e.ServeHTTP, "/-/reload", http.MethodPost, "", nil)
 	select {
 	case <-c:
 		return
@@ -60,6 +60,6 @@ func TestConfig(t *testing.T) {
 		})
 	}))
 	ret := map[string]string{}
-	r := api.TestCall(t, e, "/api/v1/status/config", http.MethodGet, "", &ret)
+	r := api.TestCall(t, e.ServeHTTP, "/api/v1/status/config", http.MethodGet, "", &ret)
 	r.Equal(configTest, ret["yaml"])
 }

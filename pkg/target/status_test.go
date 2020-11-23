@@ -15,36 +15,36 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package test
+package target
 
 import (
-	"encoding/json"
-	"gopkg.in/yaml.v2"
+	"fmt"
+	"github.com/prometheus/prometheus/scrape"
+	"github.com/stretchr/testify/require"
+	"testing"
+	"time"
 )
 
-// MustJSON marshal obj to json string, a panic will be thrown if marshal failed
-func MustJSON(obj interface{}) string {
-	data, err := json.Marshal(obj)
-	if err != nil {
-		panic(err)
-	}
-	return string(data)
+func TestScrapeStatus_SetScrapeErr(t *testing.T) {
+	r := require.New(t)
+	st := NewScrapeStatus(10)
+	r.Equal(int64(10), st.Series)
+	st.SetScrapeErr(time.Now(), nil)
+	r.Equal(scrape.HealthGood, st.Health)
+	r.Equal("", st.LastError)
+
+	st = NewScrapeStatus(10)
+	st.SetScrapeErr(time.Now(), fmt.Errorf("test"))
+	r.Equal(scrape.HealthBad, st.Health)
+	r.Equal("test", st.LastError)
 }
 
-// MustYAMLV2 marshal obj to yaml string, a panic will be thrown if marshal failed
-func MustYAMLV2(obj interface{}) string {
-	data, err := yaml.Marshal(obj)
-	if err != nil {
-		panic(err)
-	}
-	return string(data)
-}
-
-// CopyJSON copy object via json marshal
-func CopyJSON(dst, from interface{}) error {
-	data, err := json.Marshal(from)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(data, dst)
+func TestScrapeStatus_UpdateSamples(t *testing.T) {
+	r := require.New(t)
+	st := NewScrapeStatus(1)
+	st.UpdateSamples(2)
+	st.UpdateSamples(2)
+	st.UpdateSamples(2)
+	st.UpdateSamples(2)
+	r.Equal(int64(2), st.Series)
 }

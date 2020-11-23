@@ -72,10 +72,14 @@ var sidecarCmd = &cobra.Command{
 				ProxyURL: sidecarCfg.injectProxyURL,
 			}, lg.WithField("component", "injector"))
 			promCli = prom.NewClient(sidecarCfg.prometheusURL)
-			wb      = sidecar.NewAPI(sidecarCfg.prometheusURL, proxy,
+			wb      = sidecar.NewAPI(
+				sidecarCfg.prometheusURL,
 				func() (bytes []byte, e error) {
 					return ioutil.ReadFile(sidecarCfg.configFile)
-				}, log.WithField("component", "web"),
+				},
+				promCli.RuntimeInfo,
+				proxy.TargetStatus,
+				log.WithField("component", "web"),
 			)
 		)
 

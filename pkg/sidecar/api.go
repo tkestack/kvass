@@ -1,3 +1,20 @@
+/*
+ * Tencent is pleased to support the open source community by making TKEStack available.
+ *
+ * Copyright (C) 2012-2019 Tencent. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+ * this file except in compliance with the License. You may obtain a copy of the
+ * License at
+ *
+ * https://opensource.org/licenses/Apache-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OF ANY KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
+
 package sidecar
 
 import (
@@ -19,30 +36,31 @@ import (
 // API is the api server of shard
 type API struct {
 	*gin.Engine
-	ConfigReload chan *config.Config
-	TargetReload chan map[string][]*target.Target
-	readConfig   func() ([]byte, error)
-	promURL      string
-	promCli      *prom.Client
-	proxy        *Proxy
-	lg           logrus.FieldLogger
-	paths        []string
+	ConfigReload       chan *config.Config
+	TargetReload       chan map[string][]*target.Target
+	readConfig         func() ([]byte, error)
+	promURL            string
+	getPromRuntimeInfo func() (*prom.RuntimeInfo, error)
+	getTargetStatus    func() map[uint64]*target.ScrapeStatus
+	lg                 logrus.FieldLogger
+	paths              []string
 }
 
 // NewAPI create new api server of shard
 func NewAPI(
 	promURL string,
-	proxy *Proxy,
 	readConfig func() ([]byte, error),
+	getPromRuntimeInfo func() (*prom.RuntimeInfo, error),
+	getTargetStatus func() map[uint64]*target.ScrapeStatus,
 	lg logrus.FieldLogger) *API {
 	w := &API{
-		ConfigReload: make(chan *config.Config, 2),
-		TargetReload: make(chan map[string][]*target.Target, 2),
-		Engine:       gin.Default(),
-		lg:           lg,
-		promURL:      promURL,
-		promCli:      prom.NewClient(promURL),
-		proxy:        proxy,
+		ConfigReload:       make(chan *config.Config, 2),
+		TargetReload:       make(chan map[string][]*target.Target, 2),
+		Engine:             gin.Default(),
+		lg:                 lg,
+		promURL:            promURL,
+		getPromRuntimeInfo: getPromRuntimeInfo,
+		getTargetStatus:    getTargetStatus,
 	}
 
 	w.GET(w.path("/api/v1/shard/runtimeinfo/"), api.Wrap(w.lg, w.runtimeInfo))
@@ -78,13 +96,13 @@ func (w *API) Run(address string) error {
 }
 
 func (w *API) runtimeInfo(g *gin.Context) *api.Result {
-	r, err := w.promCli.RuntimeInfo()
+	r, err := w.getPromRuntimeInfo()
 	if err != nil {
 		return api.InternalErr(err, "get runtime from prometheus")
 	}
 
 	min := int64(0)
-	for _, r := range w.proxy.targets {
+	for _, r := range w.getTargetStatus() {
 		min += r.Series
 	}
 
@@ -95,7 +113,7 @@ func (w *API) runtimeInfo(g *gin.Context) *api.Result {
 }
 
 func (w *API) getTargets(g *gin.Context) *api.Result {
-	return api.Data(w.proxy.targets)
+	return api.Data(w.getTargetStatus())
 }
 
 func (w *API) updateTargets(g *gin.Context) *api.Result {

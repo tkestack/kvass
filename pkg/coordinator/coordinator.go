@@ -69,7 +69,7 @@ func (c *Coordinator) Run(ctx context.Context) error {
 }
 
 type shardInfo struct {
-	shard      *shard.Shard
+	shard      *shard.Group
 	runtime    *shard.RuntimeInfo
 	scraping   map[uint64]bool
 	newTargets map[string][]*target.Target
@@ -170,7 +170,7 @@ func (c *Coordinator) globalScraping(info []*shardInfo) map[uint64]*shardInfo {
 	return ret
 }
 
-func (c *Coordinator) getShardsInfo(shards []*shard.Shard) []*shardInfo {
+func (c *Coordinator) getShardsInfo(shards []*shard.Group) []*shardInfo {
 	all := make([]*shardInfo, len(shards))
 	g := errgroup.Group{}
 	for index, tmp := range shards {

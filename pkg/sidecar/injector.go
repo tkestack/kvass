@@ -55,13 +55,13 @@ type InjectConfigOptions struct {
 // Injector gen injected config file
 type Injector struct {
 	sync.Mutex
-	log        logrus.FieldLogger
 	originFile string
 	outFile    string
 	option     InjectConfigOptions
 	curTargets map[string][]*target.Target
 	readFile   func(file string) ([]byte, error)
 	writeFile  func(filename string, data []byte, perm os.FileMode) error
+	log        logrus.FieldLogger
 }
 
 // NewInjector create new injector with InjectConfigOptions

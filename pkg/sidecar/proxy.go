@@ -75,6 +75,11 @@ func (p *Proxy) UpdateTargets(groups map[string][]*target.Target) error {
 	return nil
 }
 
+// TargetStatus return current targets status
+func (p *Proxy) TargetStatus() map[uint64]*target.ScrapeStatus {
+	return p.targets
+}
+
 // ServeHTTP handle one Proxy request
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	job, hashStr, realURL := translateURL(*r.URL)
