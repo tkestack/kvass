@@ -73,11 +73,7 @@ Coordinator use label selector to select shards StatefulSets, every StatefulSet 
 >
 > cd kvass
 >
-> make 
-
-## Design
-
-you can found design details from [design doc](./documents/design.md)
+> make
 
 ## License
 Apache License 2.0, see [LICENSE](./LICENSE).
