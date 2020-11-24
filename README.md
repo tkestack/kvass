@@ -67,6 +67,16 @@ Coordinator use label selector to select shards StatefulSets, every StatefulSet 
 
 > --shard.selector=app.kubernetes.io/name=prometheus
 
+## Suggestion for flags
+
+The memory useage of every Prometheus is associated with the max head series.
+
+The recommended "max series" is 750000, set  Coordinator flag
+
+> --shard.max-series=750000
+
+The memory limit of Prometheu with 750000 max series is 8G.
+
 ## Build binary
 
 > git clone https://github.com/tkestack/kvass
