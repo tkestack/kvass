@@ -11,6 +11,8 @@ Thanos (or other storage solution) is used to provide a global data view。
 
 ![image-20201123224137790](./README.assets/image-20201123224137790.png)
 
+* **Coordinator** loads origin config file and do all prometheus service discovery, for every target, Coordinator do "relabel_configs" and explore it's series scale and try assgin it to Sidecar according to Head Block Series of all Prometheus instance.
+* **Sidecar** receives targets and generate new config file for prometheus only use "static_configs"。
 ------
 
 ## Feature
