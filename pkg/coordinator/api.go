@@ -19,18 +19,18 @@ package coordinator
 
 import (
 	"sort"
-	"tkestack.io/kvass/pkg/target"
 
-	"github.com/prometheus/prometheus/scrape"
-	v1 "github.com/prometheus/prometheus/web/api/v1"
-	"tkestack.io/kvass/pkg/discovery"
-	"tkestack.io/kvass/pkg/prom"
-
-	"tkestack.io/kvass/pkg/api"
-
+	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/scrape"
+	v1 "github.com/prometheus/prometheus/web/api/v1"
 	"github.com/sirupsen/logrus"
+
+	"tkestack.io/kvass/pkg/api"
+	"tkestack.io/kvass/pkg/discovery"
+	"tkestack.io/kvass/pkg/prom"
+	"tkestack.io/kvass/pkg/target"
 )
 
 // API is the api server of coordinator
@@ -62,6 +62,7 @@ func NewAPI(
 		getActiveTargets: getActiveTargets,
 		getDropTargets:   getDropTargets,
 	}
+	pprof.Register(w.Engine)
 
 	w.GET("/api/v1/targets", api.Wrap(lg, w.targets))
 	w.POST("/-/reload", api.Wrap(lg, func(ctx *gin.Context) *api.Result {

@@ -80,13 +80,13 @@ func (e *Explore) Get(job string, hash uint64) *target.ScrapeStatus {
 // ApplyConfig delete invalid job's targets according to config
 // the new targets will be add by UpdateTargets
 func (e *Explore) ApplyConfig(cfg *config.Config) error {
-	e.targetsLock.Lock()
-	defer e.targetsLock.Unlock()
-
-	jobs := make([]string, 0)
+	jobs := make([]string, 0, len(cfg.ScrapeConfigs))
 	for _, j := range cfg.ScrapeConfigs {
 		jobs = append(jobs, j.JobName)
 	}
+
+	e.targetsLock.Lock()
+	defer e.targetsLock.Unlock()
 
 	newTargets := map[string]map[uint64]*exploringTarget{}
 	for k, v := range e.targets {
@@ -142,7 +142,6 @@ func (e *Explore) Run(ctx context.Context, con int) error {
 					hash := tar.target.Hash
 					err := e.exploreOnce(ctx, tar)
 					if err != nil {
-						//e.logger.Errorf("explore failed %d : %s : %s", hash, tar.target.Labels.String(), err.Error())
 						go func() {
 							time.Sleep(e.retryInterval)
 							e.targetsLock.Lock()

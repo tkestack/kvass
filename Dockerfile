@@ -1,4 +1,4 @@
 FROM ubuntu:latest
-COPY kvass /kvass
+COPY build/kvass /kvass
 
 ENTRYPOINT ["/kvass"]

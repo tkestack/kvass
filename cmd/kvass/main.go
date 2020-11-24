@@ -24,9 +24,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-
-	_ "net/http/pprof"
-
 	"github.com/spf13/cobra"
 )
 

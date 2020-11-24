@@ -22,29 +22,26 @@ import (
 	"io/ioutil"
 	"sync"
 	"time"
+
+	"github.com/go-kit/kit/log"
+	"github.com/prometheus/common/promlog"
+	"github.com/prometheus/prometheus/config"
+	prom_discovery "github.com/prometheus/prometheus/discovery"
+	sd_config "github.com/prometheus/prometheus/discovery/config"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
+
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+
+	"tkestack.io/kvass/pkg/coordinator"
 	"tkestack.io/kvass/pkg/discovery"
 	"tkestack.io/kvass/pkg/explore"
 	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/shard"
 	k8s_shard "tkestack.io/kvass/pkg/shard/kubernetes"
 	"tkestack.io/kvass/pkg/target"
-
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-
-	"github.com/prometheus/common/promlog"
-	prom_discovery "github.com/prometheus/prometheus/discovery"
-
-	"github.com/prometheus/prometheus/config"
-
-	"golang.org/x/sync/errgroup"
-
-	"github.com/go-kit/kit/log"
-	sd_config "github.com/prometheus/prometheus/discovery/config"
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
-
-	"tkestack.io/kvass/pkg/coordinator"
 )
 
 var cdCfg = struct {
