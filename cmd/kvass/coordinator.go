@@ -60,7 +60,7 @@ var cdCfg = struct {
 func init() {
 	coordinatorCmd.Flags().StringVar(&cdCfg.shardNamespace, "shard.namespace", "", "namespace of target shard StatefulSets")
 	coordinatorCmd.Flags().StringVar(&cdCfg.shardSelector, "shard.selector", "app.kubernetes.io/name=prometheus", "label selector for select target StatefulSets")
-	coordinatorCmd.Flags().IntVar(&cdCfg.shardPort, "shard.port", 8080, "the port of shard client")
+	coordinatorCmd.Flags().IntVar(&cdCfg.shardPort, "shard.port", 8080, "the port of sidecar server")
 	coordinatorCmd.Flags().Int64Var(&cdCfg.shardMaxSeries, "shard.max-series", 1000000, "max series of per shard")
 	coordinatorCmd.Flags().Int32Var(&cdCfg.shadMaxShard, "shard.max-shard", 999999, "max shard number")
 	coordinatorCmd.Flags().IntVar(&cdCfg.exploreMaxCon, "explore.concurrence", 50, "max explore concurrence")
@@ -68,9 +68,9 @@ func init() {
 	coordinatorCmd.Flags().StringVar(&cdCfg.configFile, "config.file", "prometheus.yml", "config file path")
 	coordinatorCmd.Flags().DurationVar(&cdCfg.syncInterval, "coordinator.interval", time.Second*10, "the interval of coordinator loop")
 
-	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.url, "inject.kubernetes-url", "", "config file path")
-	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.token, "inject.kubernetes-token", "", "config file path")
-	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.proxy, "inject.kubernetes-proxy", "", "config file path")
+	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.url, "inject.kubernetes-url", "", "kube-apiserver url to inject to all kubernetes sd")
+	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.token, "inject.kubernetes-token", "", "kube-apiserver token to inject to all kubernetes sd")
+	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.proxy, "inject.kubernetes-proxy", "", "ckube-apiserver proxy url to inject to all kubernetes sd")
 
 	rootCmd.AddCommand(coordinatorCmd)
 }
