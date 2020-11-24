@@ -123,6 +123,7 @@ func (w *API) updateTargets(g *gin.Context) *api.Result {
 	if err := g.BindJSON(&m); err != nil {
 		return api.BadDataErr(err, "bind json")
 	}
+
 	w.TargetReload <- m
 	return api.Data(nil)
 }
