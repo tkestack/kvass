@@ -1,37 +1,96 @@
-# Kvass
+<div align=center><img width=800 hight=400 src="./README.assets/logo.png" /></div>
+
+Kvass is a [Prometheus](https://github.com/prometheus/prometheus) horizontal auto-scaling solution ,  which uses Sidecar to generate new config only use "static_configs" for Prometheus scraping according to targets assigned from Coordinator.
+
+A Coordinator manage all shards  and assigned targets to each of them.
+[Thanos](https://github.com/thanos-io/thanos) (or other storage solution) is used for global data view.
 
   [![Go Report Card](https://goreportcard.com/badge/github.com/tkestack/kvass)](https://goreportcard.com/report/github.com/tkestack/kvass)  [![Build](https://github.com/tkestack/kvass/workflows/Build/badge.svg?branch=master)]()   [![codecov](https://codecov.io/gh/tkestack/kvass/branch/master/graph/badge.svg)](https://codecov.io/gh/tkestack/kvass)
 
 ------
 
-Kvass provides a solution for Prometheus sharding, which uses Sidecar to generate new config only use "static_configs" for Prometheus scraping according to targets assigned from Coordinator.
+# Table of Contents
 
-A Coordinator manage all shards  and assigned targets to each of them。
-Thanos (or other storage solution) is used to provide a global data view。
+- [Overview](#overview)
+- [Architecture](#Architecture)
+  - [Components](#Components)
+    * [Coordinator](#Coordinator)
+    * [Sidecar](#Sidecarr)
+  - [Kvass + Thanos](#Kvass + Thanos)
+  - [Kvass + Remote storage](#Kvass + Remote storage)
+  - [Multiple replicas](#Multiple replicas)
+- [Install Example](#Install Example)
+- [Suggestion flag values](#Suggestion flag values)
+- [License](#license)
 
-![image-20201123224137790](./README.assets/image-20201123224137790.png)
+## Overview
 
-* **Coordinator** loads origin config file and do all prometheus service discovery, for every target, Coordinator do "relabel_configs" and explore it's series scale and try assgin it to Sidecar according to Head Block Series of all Prometheus instance.
-* **Sidecar** receives targets and generate new config file for prometheus only use "static_configs"。
-------
+Kvass is a Prometheus horizontal auto-scaling solution with following features. 
 
-## Feature
-
+* Easy to use
 * Tens of millions series supported (thousands of k8s nodes)
-* One configuration file
-* Dynamic scaling
+* One prometheus configuration file
+* Auto scaling
 * Sharding according to the actual target load instead of label hash
 * Multiple replicas supported
 
-## Quick start 
+# Architecture
 
-clone kvass to local 
+<img src="./README.assets/image-20201126031456582.png" alt="image-20201126031456582" style="zoom:50%;" />
+
+## Components
+
+### Coordinator
+
+See flags of Coordinator [code](https://github.com/tkestack/kvass/blob/master/cmd/kvass/coordinator.go#L61)
+
+* Coordinaotr loads origin config file and do all prometheus service discovery
+* For every active target, Coordinator do all "relabel_configs" and explore target series scale
+* Coordinaotr periodly try assgin explored targets to Sidecar according to Head Block Series of Prometheus.
+
+<img src="./README.assets/image-20201126031409284.png" alt="image-20201126031409284" style="zoom:50%;" />
+
+### Sidecar
+
+See flags of Sidecar [code](https://github.com/tkestack/kvass/blob/master/cmd/kvass/sidecar.go#L48)
+
+* Sidecar receive targets assign to it from Coordinator.Labels result of target after relabel process will also be send to Sidecar.
+
+* Sidecar generate a new Prometheus config file only use "static_configs" service discovery, and delete all "relabel_configs".
+
+* All Prometheus scraping request will be proxied to Sidecar for target series statistics.
+
+  
+
+  <img src="./README.assets/image-20201126032909776.png" alt="image-20201126032909776" style="zoom:50%;" />
+
+## Kvass + Thanos
+
+Since the data of Prometheus now distribution on shards, we need a way to get global data view.
+
+[Thanos](https://github.com/thanos-io/thanos) is a good choice. What we need to do is adding Kvass sidecar beside Thanos sidecar, and setting up a Kvass coordinator.
+
+![image-20201126035103180](./README.assets/image-20201126035103180.png)
+
+## Kvass + Remote storage
+
+If you want to use remote storage like influxdb, just set "remote write" in origin Prometheus config.
+
+## Multiple replicas
+
+Coordinator use label selector to select shards StatefulSets, every StatefulSet is a replica, Kvass puts together Pods with same index of different StatefulSet into one Shards Group.
+
+> --shard.selector=app.kubernetes.io/name=prometheus
+
+## Install Example
+
+There is a example to how how Kvass work.
 
 > git clone https://github.com/tkestack/kvass
-
-install example (just an example with testing metrics)
-
-> Kubectl create -f ./examples
+>
+> cd kvass/example
+>
+> kubectl create -f ./examples
 
 you can found a Deployment named "metrics" with 6 Pod, each Pod will generate 10045 series (45 series from golang default metrics) metircs。
 
@@ -61,13 +120,7 @@ but we can get global data view use thanos-query
 
 ![image-20200917112711674](./README.assets/image-20200917112711674.png)
 
-## Multiple replicas
-
-Coordinator use label selector to select shards StatefulSets, every StatefulSet is a replica, Kvass puts together Pods with same index of different StatefulSet into one Shards Group.
-
-> --shard.selector=app.kubernetes.io/name=prometheus
-
-## Suggestion for flags
+## Suggestion flag values
 
 The memory useage of every Prometheus is associated with the max head series.
 
@@ -75,15 +128,7 @@ The recommended "max series" is 750000, set  Coordinator flag
 
 > --shard.max-series=750000
 
-The memory limit of Prometheu with 750000 max series is 8G.
-
-## Build binary
-
-> git clone https://github.com/tkestack/kvass
->
-> cd kvass
->
-> make
+The memory request of Prometheu with 750000 max series is 8G.
 
 ## License
 Apache License 2.0, see [LICENSE](./LICENSE).
