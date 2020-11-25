@@ -10,7 +10,6 @@ A Coordinator manage all shards  and assigned targets to each of them.
 ------
 
 # Table of Contents
-   * [Table of Contents](#table-of-contents)
    * [Overview](#overview)
    * [Architecture](#architecture)
       * [Components](#components)
