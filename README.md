@@ -10,20 +10,21 @@ A Coordinator manage all shards  and assigned targets to each of them.
 ------
 
 # Table of Contents
+   * [Table of Contents](#table-of-contents)
+   * [Overview](#overview)
+   * [Architecture](#architecture)
+      * [Components](#components)
+         * [Coordinator](#coordinator)
+         * [Sidecar](#sidecar)
+      * [Kvass   Thanos](#kvass--thanos)
+      * [Kvass   Remote storage](#kvass--remote-storage)
+      * [Multiple replicas](#multiple-replicas)
+   * [Install Example](#install-example)
+   * [Suggestion flag values](#suggestion-flag-values)
+   * [License](#license)
 
-- [Overview](#overview)
-- [Architecture](#Architecture)
-  - [Components](#Components)
-    * [Coordinator](#Coordinator)
-    * [Sidecar](#Sidecarr)
-  - [Kvass + Thanos](#Kvass + Thanos)
-  - [Kvass + Remote storage](#Kvass + Remote storage)
-  - [Multiple replicas](#Multiple replicas)
-- [Install Example](#Install Example)
-- [Suggestion flag values](#Suggestion flag values)
-- [License](#license)
 
-## Overview
+# Overview
 
 Kvass is a Prometheus horizontal auto-scaling solution with following features. 
 
@@ -82,7 +83,7 @@ Coordinator use label selector to select shards StatefulSets, every StatefulSet 
 
 > --shard.selector=app.kubernetes.io/name=prometheus
 
-## Install Example
+# Install Example
 
 There is a example to how how Kvass work.
 
@@ -120,7 +121,7 @@ but we can get global data view use thanos-query
 
 ![image-20200917112711674](./README.assets/image-20200917112711674.png)
 
-## Suggestion flag values
+# Suggestion flag values
 
 The memory useage of every Prometheus is associated with the max head series.
 
@@ -130,6 +131,7 @@ The recommended "max series" is 750000, set  Coordinator flag
 
 The memory request of Prometheu with 750000 max series is 8G.
 
-## License
+# License
+
 Apache License 2.0, see [LICENSE](./LICENSE).
 
