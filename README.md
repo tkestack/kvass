@@ -19,7 +19,7 @@ A Coordinator manage all shards  and assigned targets to each of them.
       * [Kvass + Remote storage](#kvass--remote-storage)
       * [Multiple replicas](#multiple-replicas)
    * [Install Example](#install-example)
-   * [Suggestion flag values](#suggestion-flag-values)
+   * [Flag values suggestion](#Flag-flag-suggestion)
    * [License](#license)
 
 
@@ -120,7 +120,7 @@ but we can get global data view use thanos-query
 
 ![image-20200917112711674](./README.assets/image-20200917112711674.png)
 
-# Suggestion flag values
+#  Flag values suggestion
 
 The memory useage of every Prometheus is associated with the max head series.
 
