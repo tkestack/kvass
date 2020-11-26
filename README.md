@@ -1,6 +1,7 @@
 <div align=center><img width=800 hight=400 src="./README.assets/logo.png" /></div>
 
 [中文版](./README_CN.md)
+
 Kvass is a [Prometheus](https://github.com/prometheus/prometheus) horizontal auto-scaling solution ,  which uses Sidecar to generate new config only use "static_configs" for Prometheus scraping according to targets assigned from Coordinator.
 
 Coordinator do service discovery all shards  and assigned targets to each of them.
