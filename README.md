@@ -19,7 +19,7 @@ A Coordinator manage all shards  and assigned targets to each of them.
       * [Kvass + Remote storage](#kvass--remote-storage)
       * [Multiple replicas](#multiple-replicas)
    * [Install Example](#install-example)
-   * [Flag values suggestion](#Flag-flag-suggestion)
+   * [Flag values suggestion](#Flag-values-suggestion)
    * [License](#license)
 
 
@@ -54,7 +54,7 @@ See flags of Coordinator [code](https://github.com/tkestack/kvass/blob/master/cm
 
 See flags of Sidecar [code](https://github.com/tkestack/kvass/blob/master/cmd/kvass/sidecar.go#L48)
 
-* Sidecar receive targets assign to it from Coordinator.Labels result of target after relabel process will also be send to Sidecar.
+* Sidecar receive targets from Coordinator.Labels result of target after relabel process will also be send to Sidecar.
 
 * Sidecar generate a new Prometheus config file only use "static_configs" service discovery, and delete all "relabel_configs".
 
@@ -66,7 +66,7 @@ See flags of Sidecar [code](https://github.com/tkestack/kvass/blob/master/cmd/kv
 
 ## Kvass + Thanos
 
-Since the data of Prometheus now distribution on shards, we need a way to get global data view.
+Since the data of Prometheus now distribut on shards, we need a way to get global data view.
 
 [Thanos](https://github.com/thanos-io/thanos) is a good choice. What we need to do is adding Kvass sidecar beside Thanos sidecar, and setting up a Kvass coordinator.
 
