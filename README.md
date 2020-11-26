@@ -2,9 +2,9 @@
 
 [中文版](./README_CN.md)
 
-Kvass is a [Prometheus](https://github.com/prometheus/prometheus) horizontal auto-scaling solution ,  which uses Sidecar to generate new config only use "static_configs" for Prometheus scraping according to targets assigned from Coordinator.
+Kvass is a [Prometheus](https://github.com/prometheus/prometheus) horizontal auto-scaling solution ,  which uses Sidecar to generate new config only use "static_configs" for Prometheuses according to targets assigned from Coordinator.
 
-Coordinator do service discovery all shards  and assigned targets to each of them.
+Coordinator do service discovery, shards management and assigned targets to each of them.
 [Thanos](https://github.com/thanos-io/thanos) (or other storage solution) is used for global data view.
 
   [![Go Report Card](https://goreportcard.com/badge/github.com/tkestack/kvass)](https://goreportcard.com/report/github.com/tkestack/kvass)  [![Build](https://github.com/tkestack/kvass/workflows/Build/badge.svg?branch=master)]()   [![codecov](https://codecov.io/gh/tkestack/kvass/branch/master/graph/badge.svg)](https://codecov.io/gh/tkestack/kvass)
