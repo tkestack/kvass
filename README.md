@@ -2,7 +2,7 @@
 
 [中文版](./README_CN.md)
 
-Kvass is a [Prometheus](https://github.com/prometheus/prometheus) horizontal auto-scaling solution ,  which uses Sidecar to generate special config file only containes part of targets assigned from Coordinator for every Prometheuses shard.
+Kvass is a [Prometheus](https://github.com/prometheus/prometheus) horizontal auto-scaling solution ,  which uses Sidecar to generate special config file only containes part of targets assigned from Coordinator for every Prometheus shard.
 
 Coordinator do service discovery, Prometheus shards management and assign targets to each of shard.
 [Thanos](https://github.com/thanos-io/thanos) (or other storage solution) is used for global data view.
