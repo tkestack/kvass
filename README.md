@@ -20,7 +20,7 @@ Coordinator do service discovery all shards  and assigned targets to each of the
       * [Kvass + Thanos](#kvass--thanos)
       * [Kvass + Remote storage](#kvass--remote-storage)
       * [Multiple replicas](#multiple-replicas)
-   * [Install Example](#install-example)
+   * [Demo](#Demo)
    * [Flag values suggestion](#Flag-values-suggestion)
    * [License](#license)
 
@@ -84,9 +84,9 @@ Coordinator use label selector to select shards StatefulSets, every StatefulSet 
 
 > --shard.selector=app.kubernetes.io/name=prometheus
 
-# Install Example
+# Demo
 
-There is a example to how how Kvass work.
+There is a example to show how Kvass work.
 
 > git clone https://github.com/tkestack/kvass
 >
