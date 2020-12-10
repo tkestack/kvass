@@ -18,6 +18,7 @@
 package kubernetes
 
 import (
+	"context"
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -59,12 +60,12 @@ func New(cli kubernetes.Interface,
 		cli:            cli,
 		replicateCache: map[string]*shard.Replicas{},
 		getStatefulSets: func() (list *v13.StatefulSetList, e error) {
-			return cli.AppsV1().StatefulSets(stsNamespace).List(v12.ListOptions{
+			return cli.AppsV1().StatefulSets(stsNamespace).List(context.TODO(), v12.ListOptions{
 				LabelSelector: stsSelector,
 			})
 		},
 		getPods: func(selector map[string]string) (list *v1.PodList, e error) {
-			return cli.CoreV1().Pods(stsNamespace).List(v12.ListOptions{
+			return cli.CoreV1().Pods(stsNamespace).List(context.TODO(), v12.ListOptions{
 				LabelSelector: labels.SelectorFromSet(selector).String(),
 			})
 		},
@@ -120,7 +121,7 @@ func (s *ShardManager) Shards() ([]*shard.Group, error) {
 
 // ChangeScale create or delete Shards according to "expReplicate"
 func (s *ShardManager) ChangeScale(expect int32) error {
-	stss, err := s.cli.AppsV1().StatefulSets(s.stsNamespace).List(v12.ListOptions{
+	stss, err := s.cli.AppsV1().StatefulSets(s.stsNamespace).List(context.TODO(), v12.ListOptions{
 		LabelSelector: s.stsSelector,
 	})
 	if err != nil {
@@ -134,7 +135,7 @@ func (s *ShardManager) ChangeScale(expect int32) error {
 
 		sts.Spec.Replicas = &expect
 		s.lg.Infof("change scale to %d", expect)
-		_, err = s.cli.AppsV1().StatefulSets(s.stsNamespace).Update(&sts)
+		_, err = s.cli.AppsV1().StatefulSets(s.stsNamespace).Update(context.TODO(), &sts, v12.UpdateOptions{})
 		if err != nil {
 			s.lg.Errorf("update statefuleset %s replicate failed : %s", sts.Name, err.Error())
 		}

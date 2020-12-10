@@ -18,6 +18,7 @@
 package kubernetes
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -49,7 +50,7 @@ func createStatefulSet(t *testing.T, cli kubernetes.Interface, name string, rep 
 		},
 	}
 
-	_, err := cli.AppsV1().StatefulSets("default").Create(sts1)
+	_, err := cli.AppsV1().StatefulSets("default").Create(context.TODO(), sts1, v12.CreateOptions{})
 	r.NoError(err)
 }
 
@@ -92,7 +93,7 @@ func TestStatefulSet_ChangeScale(t *testing.T) {
 	createStatefulSet(t, cli, "rep1", 2)
 	sts := New(cli, "default", "k8s-app=prometheus", 8080, logrus.New())
 	r.NoError(sts.ChangeScale(10))
-	s, err := cli.AppsV1().StatefulSets("default").Get("rep1", v12.GetOptions{})
+	s, err := cli.AppsV1().StatefulSets("default").Get(context.TODO(), "rep1", v12.GetOptions{})
 	r.NoError(err)
 	r.Equal(int32(10), *s.Spec.Replicas)
 }

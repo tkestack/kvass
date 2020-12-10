@@ -1,6 +1,6 @@
 module tkestack.io/kvass
 
-go 1.14
+go 1.15
 
 require (
 	github.com/gin-contrib/pprof v1.3.0
@@ -8,18 +8,17 @@ require (
 	github.com/go-kit/kit v0.10.0
 	github.com/golang/protobuf v1.4.2 // indirect
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/common v0.9.1
-	github.com/prometheus/prometheus v0.0.0-00010101000000-000000000000
-	github.com/sirupsen/logrus v1.4.2
+	github.com/prometheus/common v0.14.0
+	github.com/prometheus/prometheus v1.8.2-0.20201015110737-0a7fdd3b7696
+	github.com/sirupsen/logrus v1.6.0
 	github.com/spf13/cobra v1.0.0
 	github.com/stretchr/testify v1.5.1
 	go.etcd.io/etcd v0.0.0-20191023171146-3cf2f69b5738
-	golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a
+	golang.org/x/sync v0.0.0-20200930132711-30421366ff76
 	google.golang.org/grpc v1.32.0 // indirect
-	gopkg.in/yaml.v2 v2.2.8
-	k8s.io/api v0.17.5
-	k8s.io/apimachinery v0.17.5
-	k8s.io/client-go v0.17.5
+	gopkg.in/yaml.v2 v2.3.0
+	k8s.io/api v0.19.2
+	k8s.io/apimachinery v0.19.2
+	k8s.io/client-go v0.19.2
+	sigs.k8s.io/structured-merge-diff/v2 v2.0.1 // indirect
 )
-
-replace github.com/prometheus/prometheus => github.com/prometheus/prometheus v0.0.0-20200507164740-ecee9c8abfd1

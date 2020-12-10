@@ -68,7 +68,7 @@ func newJobInfo(cfg *config.ScrapeConfig) (*JobInfo, error) {
 		cfg.HTTPClientConfig.ProxyURL.URL = newURL
 	}
 
-	client, err := config_util.NewClientFromConfig(cfg.HTTPClientConfig, cfg.JobName, true)
+	client, err := config_util.NewClientFromConfig(cfg.HTTPClientConfig, cfg.JobName, true, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating HTTP cli")
 	}

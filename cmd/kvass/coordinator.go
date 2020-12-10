@@ -27,7 +27,6 @@ import (
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/prometheus/config"
 	prom_discovery "github.com/prometheus/prometheus/discovery"
-	sd_config "github.com/prometheus/prometheus/discovery/config"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -151,9 +150,9 @@ distribution targets to shards`,
 				exp.ApplyConfig,
 				targetDiscovery.ApplyConfig,
 				func(cfg *config.Config) error {
-					c := make(map[string]sd_config.ServiceDiscoveryConfig)
+					c := make(map[string]prom_discovery.Configs)
 					for _, v := range cfg.ScrapeConfigs {
-						c[v.JobName] = v.ServiceDiscoveryConfig
+						c[v.JobName] = v.ServiceDiscoveryConfigs
 					}
 					return discoveryManagerScrape.ApplyConfig(c)
 				},

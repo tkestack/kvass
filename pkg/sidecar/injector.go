@@ -19,6 +19,7 @@ package sidecar
 
 import (
 	"fmt"
+	"github.com/prometheus/prometheus/discovery"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -36,7 +37,6 @@ import (
 
 	"github.com/pkg/errors"
 	config_util "github.com/prometheus/common/config"
-	sd_config "github.com/prometheus/prometheus/discovery/config"
 	"gopkg.in/yaml.v2"
 )
 
@@ -113,8 +113,8 @@ func (i *Injector) UpdateConfig() error {
 			}
 		}
 
-		job.ServiceDiscoveryConfig = sd_config.ServiceDiscoveryConfig{
-			StaticConfigs: target2targetGroup(job.JobName, i.curTargets[job.JobName]),
+		job.ServiceDiscoveryConfigs = []discovery.Config{
+			discovery.StaticConfig(target2targetGroup(job.JobName, i.curTargets[job.JobName])),
 		}
 
 		if job.HTTPClientConfig.BearerToken != "" {

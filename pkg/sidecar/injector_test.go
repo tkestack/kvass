@@ -19,6 +19,7 @@ package sidecar
 import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -74,7 +75,7 @@ func TestInjector_UpdateConfig(t *testing.T) {
 	}))
 
 	outJob := out.ScrapeConfigs[0]
-	outSD := outJob.ServiceDiscoveryConfig.StaticConfigs[0]
+	outSD := outJob.ServiceDiscoveryConfigs[0].(discovery.StaticConfig)[0]
 	r.Equal("http://127.0.0.1:8008", outJob.HTTPClientConfig.ProxyURL.String())
 	r.Equal(model.LabelValue("127.0.0.1:80"), outSD.Targets[0][model.AddressLabel])
 	r.Equal(model.LabelValue("http"), outSD.Labels[model.SchemeLabel])

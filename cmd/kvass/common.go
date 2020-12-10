@@ -20,6 +20,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"github.com/prometheus/prometheus/discovery/kubernetes"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -89,16 +90,20 @@ func configInject(cfg *config.Config, option *configInjectOption) {
 		return
 	}
 	for _, job := range cfg.ScrapeConfigs {
-		if option.kubernetes.url != "" && job.ServiceDiscoveryConfig.KubernetesSDConfigs != nil {
-			for _, sd := range job.ServiceDiscoveryConfig.KubernetesSDConfigs {
+		for _, sd := range job.ServiceDiscoveryConfigs {
+			if option.kubernetes.url != "" {
+				ksd, ok := sd.(*kubernetes.SDConfig)
+				if !ok {
+					continue
+				}
 				u, _ := url.Parse(option.kubernetes.url)
-				sd.APIServer = config_util.URL{URL: u}
-				sd.HTTPClientConfig.BearerToken = config_util.Secret(option.kubernetes.token)
+				ksd.APIServer = config_util.URL{URL: u}
+				ksd.HTTPClientConfig.BearerToken = config_util.Secret(option.kubernetes.token)
 				if option.kubernetes.proxy != "" {
 					u, _ := url.Parse(option.kubernetes.proxy)
-					sd.HTTPClientConfig.ProxyURL = config_util.URL{URL: u}
+					ksd.HTTPClientConfig.ProxyURL = config_util.URL{URL: u}
 				}
-				sd.HTTPClientConfig.TLSConfig.InsecureSkipVerify = true
+				ksd.HTTPClientConfig.TLSConfig.InsecureSkipVerify = true
 			}
 		}
 	}
