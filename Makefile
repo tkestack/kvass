@@ -24,8 +24,8 @@ test-coverage: ## Run tests with coverage
 	@cat cover.out >> coverage.txt
 
 build: dep ## Build the binary file
-	@go build -i -o build/kvass cmd/kvass/*.go
+	@go build -i -o kvass cmd/kvass/*.go
 
 clean: ## Remove previous build
-	@rm -fr ./build
+	@rm -fr kvass
 	@rm -fr cover.out coverage.txt
