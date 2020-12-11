@@ -136,6 +136,27 @@ func (i *Injector) UpdateConfig() error {
 		}
 	}
 
+	for _, w := range cfg.RemoteWriteConfigs {
+		if w.HTTPClientConfig.BearerToken != "" {
+			bTokens = append(bTokens, string(w.HTTPClientConfig.BearerToken))
+		}
+
+		if w.HTTPClientConfig.BasicAuth != nil && w.HTTPClientConfig.BasicAuth.Password != "" {
+			password = append(password, string(w.HTTPClientConfig.BasicAuth.Password))
+		}
+
+	}
+
+	for _, w := range cfg.RemoteReadConfigs {
+		if w.HTTPClientConfig.BearerToken != "" {
+			bTokens = append(bTokens, string(w.HTTPClientConfig.BearerToken))
+		}
+
+		if w.HTTPClientConfig.BasicAuth != nil && w.HTTPClientConfig.BasicAuth.Password != "" {
+			password = append(password, string(w.HTTPClientConfig.BasicAuth.Password))
+		}
+	}
+
 	gen, err := yaml.Marshal(&cfg)
 	if err != nil {
 		return errors.Wrapf(err, "marshal config failed")

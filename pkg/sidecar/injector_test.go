@@ -18,6 +18,7 @@ package sidecar
 
 import (
 	"github.com/prometheus/common/model"
+
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/pkg/labels"
@@ -27,19 +28,21 @@ import (
 	"os"
 	"testing"
 	"tkestack.io/kvass/pkg/target"
-	"tkestack.io/kvass/pkg/utils/test"
 )
 
 func TestInjector_UpdateConfig(t *testing.T) {
-	job := &config.ScrapeConfig{
-		JobName: "job",
-	}
-	job.HTTPClientConfig.BearerToken = "123"
-
-	cfg := &config.Config{
-		ScrapeConfigs: []*config.ScrapeConfig{job},
-	}
-
+	cfg := `global: {}
+scrape_configs:
+- job_name: job
+  honor_timestamps: false
+  bearer_token: job
+remote_write:
+- url: http://127.0.0.1
+  bearer_token: write
+remote_read:
+- url: http://127.0.0.1
+  bearer_token: read
+`
 	tar := &target.Target{
 		Hash: 1,
 		Labels: labels.Labels{
@@ -64,15 +67,17 @@ func TestInjector_UpdateConfig(t *testing.T) {
 
 	out := &config.Config{}
 	in.readFile = func(file string) (bytes []byte, e error) {
-		return []byte(test.MustYAMLV2(cfg)), nil
+		return []byte(cfg), nil
 	}
 	in.writeFile = func(filename string, data []byte, perm os.FileMode) error {
 		return yaml.Unmarshal(data, out)
 	}
 
 	r.NoError(in.UpdateTargets(map[string][]*target.Target{
-		job.JobName: {tar},
+		"job": {tar},
 	}))
+
+	r.NoError(in.UpdateConfig())
 
 	outJob := out.ScrapeConfigs[0]
 	outSD := outJob.ServiceDiscoveryConfigs[0].(discovery.StaticConfig)[0]
@@ -83,4 +88,7 @@ func TestInjector_UpdateConfig(t *testing.T) {
 	r.Equal(model.LabelValue("https"), outSD.Labels[model.ParamLabelPrefix+paramScheme])
 	r.Equal(model.LabelValue("job"), outSD.Labels[model.ParamLabelPrefix+paramJobName])
 	r.Equal(model.LabelValue("1"), outSD.Labels[model.ParamLabelPrefix+paramHash])
+	r.Equal("job", string(outJob.HTTPClientConfig.BearerToken))
+	r.Equal("write", string(out.RemoteWriteConfigs[0].HTTPClientConfig.BearerToken))
+	r.Equal("read", string(out.RemoteReadConfigs[0].HTTPClientConfig.BearerToken))
 }
