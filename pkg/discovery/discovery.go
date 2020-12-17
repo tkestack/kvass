@@ -90,11 +90,17 @@ func (m *TargetsDiscovery) DropTargets() map[string][]*SDTargets {
 
 // ApplyConfig save new scrape config
 func (m *TargetsDiscovery) ApplyConfig(cfg *config.Config) error {
+	newActiveTargets := map[string][]*SDTargets{}
+	newDropTargets := map[string][]*SDTargets{}
 	newCfg := map[string]*config.ScrapeConfig{}
 	for _, j := range cfg.ScrapeConfigs {
 		newCfg[j.JobName] = j
+		newActiveTargets[j.JobName] = m.activeTargets[j.JobName]
+		newDropTargets[j.JobName] = m.dropTargets[j.JobName]
 	}
 	m.config = newCfg
+	m.activeTargets = newActiveTargets
+	m.dropTargets = newDropTargets
 	return nil
 }
 
