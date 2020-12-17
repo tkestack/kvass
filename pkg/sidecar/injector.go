@@ -117,13 +117,10 @@ func (i *Injector) UpdateConfig() error {
 			discovery.StaticConfig(target2targetGroup(job.JobName, i.curTargets[job.JobName])),
 		}
 
-		if job.HTTPClientConfig.BearerToken != "" {
-			bTokens = append(bTokens, string(job.HTTPClientConfig.BearerToken))
-		}
-
-		if job.HTTPClientConfig.BasicAuth != nil && job.HTTPClientConfig.BasicAuth.Password != "" {
-			password = append(password, string(job.HTTPClientConfig.BasicAuth.Password))
-		}
+		job.Scheme = "http"
+		job.HTTPClientConfig.BearerToken = ""
+		job.HTTPClientConfig.BasicAuth = nil
+		job.HTTPClientConfig.TLSConfig = config_util.TLSConfig{}
 
 		// fix invalid label
 		job.RelabelConfigs = []*relabel.Config{
