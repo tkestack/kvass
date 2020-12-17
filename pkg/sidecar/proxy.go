@@ -121,15 +121,15 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// send origin result to prometheus
-	if _, err := io.Copy(w, bytes.NewBuffer(data)); err != nil {
-		scrapErr = fmt.Errorf("copy data to prometheus failed %v", err)
-		return
-	}
-
 	samples, err := scrape.StatisticSample(data, contentType, jobInfo.Config.MetricRelabelConfigs)
 	if err != nil {
 		scrapErr = fmt.Errorf("statisticSample failed %v", err)
+		return
+	}
+
+	// send origin result to prometheus
+	if _, err := io.Copy(w, bytes.NewBuffer(data)); err != nil {
+		scrapErr = fmt.Errorf("copy data to prometheus failed %v", err)
 		return
 	}
 
