@@ -93,16 +93,18 @@ func TestGroup_UpdateTarget(t *testing.T) {
 	var cases = []struct {
 		name        string
 		curScraping map[uint64]bool
-		wantTargets map[string][]*target.Target
+		wantTargets *UpdateTargetsRequest
 		wantUpdate  bool
 	}{
 		{
 			name:        "need update",
 			curScraping: map[uint64]bool{},
-			wantTargets: map[string][]*target.Target{
-				"job1": {
-					{
-						Hash: 1,
+			wantTargets: &UpdateTargetsRequest{
+				Targets: map[string][]*target.Target{
+					"job1": {
+						{
+							Hash: 1,
+						},
 					},
 				},
 			},
@@ -111,10 +113,12 @@ func TestGroup_UpdateTarget(t *testing.T) {
 		{
 			name:        "not need update",
 			curScraping: map[uint64]bool{1: true},
-			wantTargets: map[string][]*target.Target{
-				"job1": {
-					{
-						Hash: 1,
+			wantTargets: &UpdateTargetsRequest{
+				Targets: map[string][]*target.Target{
+					"job1": {
+						{
+							Hash: 1,
+						},
 					},
 				},
 			},

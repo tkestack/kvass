@@ -18,6 +18,8 @@
 package coordinator
 
 import (
+	"fmt"
+	"github.com/pkg/errors"
 	"sort"
 
 	"github.com/gin-contrib/pprof"
@@ -33,31 +35,32 @@ import (
 	"tkestack.io/kvass/pkg/target"
 )
 
-// API is the api server of coordinator
-type API struct {
+// Service is the api server of coordinator
+type Service struct {
 	// gin.Engine is the gin engine for handle http request
 	*gin.Engine
-	ConfigReload chan *config.Config
-	lg           logrus.FieldLogger
+	lg          logrus.FieldLogger
+	configFile  string
+	configApply []func(cfg *config.Config) error
 
-	readConfig       func() ([]byte, error)
 	getScrapeStatus  func(map[string][]*discovery.SDTargets) (map[uint64]*target.ScrapeStatus, error)
 	getActiveTargets func() map[string][]*discovery.SDTargets
 	getDropTargets   func() map[string][]*discovery.SDTargets
 }
 
-// NewAPI return a new web server
-func NewAPI(
-	readConfig func() ([]byte, error),
+// NewService return a new web server
+func NewService(
+	configFile string,
+	configApply []func(cfg *config.Config) error,
 	getScrapeStatus func(map[string][]*discovery.SDTargets) (map[uint64]*target.ScrapeStatus, error),
 	getActiveTargets func() map[string][]*discovery.SDTargets,
 	getDropTargets func() map[string][]*discovery.SDTargets,
-	lg logrus.FieldLogger) *API {
-	w := &API{
-		ConfigReload:     make(chan *config.Config, 2),
+	lg logrus.FieldLogger) *Service {
+	w := &Service{
 		Engine:           gin.Default(),
 		lg:               lg,
-		readConfig:       readConfig,
+		configFile:       configFile,
+		configApply:      configApply,
 		getScrapeStatus:  getScrapeStatus,
 		getActiveTargets: getActiveTargets,
 		getDropTargets:   getDropTargets,
@@ -66,17 +69,25 @@ func NewAPI(
 
 	w.GET("/api/v1/targets", api.Wrap(lg, w.targets))
 	w.POST("/-/reload", api.Wrap(lg, func(ctx *gin.Context) *api.Result {
-		return prom.APIReloadConfig(readConfig, w.ConfigReload)
+		return prom.APIReloadConfig(lg, configFile, configApply)
 	}))
 	w.GET("/api/v1/status/config", api.Wrap(lg, func(ctx *gin.Context) *api.Result {
-		return prom.APIReadConfig(readConfig)
+		return prom.APIReadConfig(configFile)
 	}))
 	return w
 }
 
-// targets compatible of prometheus API /api/v1/targets
+// Init init config
+func (s *Service) Init() error {
+	if err := prom.APIReloadConfig(s.lg, s.configFile, s.configApply).Err; err != "" {
+		return errors.Wrapf(fmt.Errorf(err), "init config file failed")
+	}
+	return nil
+}
+
+// targets compatible of prometheus Service /api/v1/targets
 // targets combines targets information from service discovery, sidecar and exploring
-func (a *API) targets(ctx *gin.Context) *api.Result {
+func (s *Service) targets(ctx *gin.Context) *api.Result {
 	state := ctx.Query("state")
 	sortKeys := func(targets map[string][]*discovery.SDTargets) ([]string, int) {
 		var n int
@@ -105,10 +116,10 @@ func (a *API) targets(ctx *gin.Context) *api.Result {
 	res := &v1.TargetDiscovery{}
 
 	if showActive {
-		activeTargets := a.getActiveTargets()
+		activeTargets := s.getActiveTargets()
 		activeKeys, numTargets := sortKeys(activeTargets)
 		res.ActiveTargets = make([]*v1.Target, 0, numTargets)
-		status, err := a.getScrapeStatus(activeTargets)
+		status, err := s.getScrapeStatus(activeTargets)
 		if err != nil {
 			return api.InternalErr(err, "get targets runtime")
 		}
@@ -139,7 +150,7 @@ func (a *API) targets(ctx *gin.Context) *api.Result {
 		res.ActiveTargets = []*v1.Target{}
 	}
 	if showDropped {
-		tDropped := flatten(a.getDropTargets())
+		tDropped := flatten(s.getDropTargets())
 		res.DroppedTargets = make([]*v1.DroppedTarget, 0, len(tDropped))
 		for _, t := range tDropped {
 			res.DroppedTargets = append(res.DroppedTargets, &v1.DroppedTarget{

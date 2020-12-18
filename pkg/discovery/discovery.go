@@ -21,6 +21,7 @@ import (
 	"context"
 	"github.com/prometheus/prometheus/config"
 	"sync"
+	"time"
 	"tkestack.io/kvass/pkg/target"
 
 	"github.com/prometheus/prometheus/discovery/targetgroup"
@@ -59,6 +60,27 @@ func New(log logrus.FieldLogger) *TargetsDiscovery {
 	}
 }
 
+// WaitInit block until all job's sd done
+func (m *TargetsDiscovery) WaitInit(ctx context.Context) error {
+	t := time.NewTicker(time.Second)
+l1:
+	for {
+		select {
+		case <-t.C:
+			for job := range m.config {
+				if _, exist := m.activeTargets[job]; !exist {
+					continue l1
+				}
+				m.log.Infof("job %s first service discovery done, active(%d) ,drop(%d)", job, len(m.activeTargets[job]), len(m.dropTargets[job]))
+			}
+			m.log.Infof("all job first service discovery done")
+			return nil
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
 // ActiveTargetsChan return an channel for notify active SDTargets updated
 func (m *TargetsDiscovery) ActiveTargetsChan() <-chan map[string][]*SDTargets {
 	return m.activeTargetsChan
@@ -90,11 +112,19 @@ func (m *TargetsDiscovery) DropTargets() map[string][]*SDTargets {
 
 // ApplyConfig save new scrape config
 func (m *TargetsDiscovery) ApplyConfig(cfg *config.Config) error {
+	newActiveTargets := map[string][]*SDTargets{}
+	newDropTargets := map[string][]*SDTargets{}
 	newCfg := map[string]*config.ScrapeConfig{}
 	for _, j := range cfg.ScrapeConfigs {
 		newCfg[j.JobName] = j
+		if _, exist := m.activeTargets[j.JobName]; exist {
+			newActiveTargets[j.JobName] = m.activeTargets[j.JobName]
+			newDropTargets[j.JobName] = m.dropTargets[j.JobName]
+		}
 	}
 	m.config = newCfg
+	m.activeTargets = newActiveTargets
+	m.dropTargets = newDropTargets
 	return nil
 }
 
@@ -119,7 +149,7 @@ func (m *TargetsDiscovery) translateTargets(targets map[string][]*targetgroup.Gr
 
 		cfg := m.config[job]
 		if cfg == nil {
-			m.log.Errorf("can not found job %m", job)
+			m.log.Warnf("can not found job %m", job)
 			continue
 		}
 

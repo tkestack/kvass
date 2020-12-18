@@ -69,6 +69,7 @@ func (c *Coordinator) Run(ctx context.Context) error {
 }
 
 type shardInfo struct {
+	isHealth   bool
 	shard      *shard.Group
 	runtime    *shard.RuntimeInfo
 	scraping   map[uint64]bool
@@ -102,7 +103,7 @@ func (c *Coordinator) reBalance(
 		for _, target := range ts {
 			t := target.ShardTarget
 			sd := scraping[t.Hash]
-			// target is scraping by sd
+			// target is scraping by this shard group
 			if sd != nil {
 				sd.newTargets[job] = append(sd.newTargets[job], t)
 				continue
@@ -111,7 +112,6 @@ func (c *Coordinator) reBalance(
 			// if no shard scraping this target, we try assign it
 			exp := c.getExploreResult(job, t.Hash)
 			if exp == nil {
-				c.log.Error("can not found target %d from explore", t.Hash)
 				continue
 			}
 
@@ -123,6 +123,10 @@ func (c *Coordinator) reBalance(
 					continue
 				}
 				for _, s := range shardsInfo {
+					if !s.isHealth {
+						continue
+					}
+
 					if s.runtime.HeadSeries+exp.Series < c.maxSeries {
 						s.runtime.HeadSeries += exp.Series
 						t.Series = exp.Series
@@ -139,7 +143,14 @@ func (c *Coordinator) reBalance(
 		}
 	}
 	c.applyShardsInfo(shardsInfo)
-	exp := int32(len(shardsInfo))
+
+	exp := int32(0)
+	for _, s := range shardsInfo {
+		if s.isHealth {
+			exp++
+		}
+	}
+
 	if needSpace > 0 {
 		exp += int32(needSpace/c.maxSeries + 1)
 		c.log.Infof("need space %d need exp = %d", needSpace, int32(needSpace/c.maxSeries+1))
@@ -178,43 +189,43 @@ func (c *Coordinator) getShardsInfo(shards []*shard.Group) []*shardInfo {
 		i := index
 		g.Go(func() (err error) {
 			si := &shardInfo{
+				isHealth:   true,
 				shard:      s,
 				newTargets: map[string][]*target.Target{},
-			}
-
-			si.runtime, err = s.RuntimeInfo()
-			if err != nil {
-				c.log.Error(err.Error())
-				return err
 			}
 
 			si.scraping, err = s.TargetsScraping()
 			if err != nil {
 				c.log.Error(err.Error())
-				return err
+				si.isHealth = false
+				si.scraping = map[uint64]bool{}
 			}
+
+			si.runtime, err = s.RuntimeInfo()
+			if err != nil {
+				c.log.Error(err.Error())
+				si.isHealth = false
+			}
+
 			all[i] = si
 			return nil
 		})
 	}
 	_ = g.Wait()
-
-	ret := make([]*shardInfo, 0)
-	for _, r := range all {
-		if r != nil {
-			ret = append(ret, r)
-		}
-	}
-
-	return ret
+	return all
 }
 
 func (c *Coordinator) applyShardsInfo(shards []*shardInfo) {
 	g := errgroup.Group{}
 	for _, tmp := range shards {
 		s := tmp
+		if !s.isHealth {
+			c.log.Warnf("shard group %s is unHealth, skip apply change", s.shard.ID)
+			continue
+		}
+
 		g.Go(func() (err error) {
-			if err := s.shard.UpdateTarget(s.newTargets); err != nil {
+			if err := s.shard.UpdateTarget(&shard.UpdateTargetsRequest{Targets: s.newTargets}); err != nil {
 				c.log.Error(err.Error())
 				return err
 			}

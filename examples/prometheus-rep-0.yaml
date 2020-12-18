@@ -70,7 +70,7 @@ spec:
         - name: kvass
           args:
             - sidecar
-          image: tkestack/kvass:v0.0.2
+          image: tkestack/kvass:v0.0.3
           imagePullPolicy: Always
           resources:
             limits:

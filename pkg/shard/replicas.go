@@ -73,8 +73,6 @@ func (r *Replicas) runtimeInfo() (*RuntimeInfo, error) {
 
 	err := r.APIGet(r.url+"/api/v1/shard/runtimeinfo/", &res)
 	if err != nil {
-		// Group may be unhealthy, the activeTargets scraping should be reload
-		r.scraping = nil
 		return nil, fmt.Errorf("get runtime info from %s failed : %s", r.ID, err.Error())
 	}
 
@@ -86,17 +84,15 @@ func (r *Replicas) targetStatus() (map[uint64]*target.ScrapeStatus, error) {
 
 	err := r.APIGet(r.url+"/api/v1/shard/targets/", &res)
 	if err != nil {
-		// Group may be unhealthy, the activeTargets scraping should reload
-		r.scraping = nil
 		return nil, fmt.Errorf("get targets status info from %s failed : %s", r.ID, err.Error())
 	}
 
 	return res, nil
 }
 
-func (r *Replicas) updateTarget(targets map[string][]*target.Target) error {
+func (r *Replicas) updateTarget(request *UpdateTargetsRequest) error {
 	newCache := map[uint64]bool{}
-	for _, ts := range targets {
+	for _, ts := range request.Targets {
 		for _, t := range ts {
 			newCache[t.Hash] = true
 		}
@@ -104,7 +100,7 @@ func (r *Replicas) updateTarget(targets map[string][]*target.Target) error {
 
 	if r.needUpdate(newCache) {
 		r.log.Infof("%s need update targets", r.ID)
-		if err := r.APIPost(r.url+"/api/v1/shard/targets/", &targets, nil); err != nil {
+		if err := r.APIPost(r.url+"/api/v1/shard/targets/", &request, nil); err != nil {
 			return err
 		}
 		r.scraping = newCache
