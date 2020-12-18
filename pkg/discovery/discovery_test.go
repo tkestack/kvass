@@ -26,8 +26,50 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"testing"
+	"time"
 )
 
+func TestTargetsDiscovery_WaitInit(t *testing.T) {
+	cfg := &config.Config{
+		ScrapeConfigs: []*config.ScrapeConfig{
+			{
+				JobName: "test",
+			},
+		},
+	}
+
+	var cases = []struct {
+		name        string
+		targets     map[string][]*SDTargets
+		wantTimeout bool
+	}{
+		{
+			name: "success",
+			targets: map[string][]*SDTargets{
+				"test": {},
+			},
+			wantTimeout: false,
+		},
+		{
+			name:        "timeout",
+			targets:     map[string][]*SDTargets{},
+			wantTimeout: true,
+		},
+	}
+
+	for _, cs := range cases {
+		t.Run(cs.name, func(t *testing.T) {
+			r := require.New(t)
+			d := New(logrus.New())
+			r.NoError(d.ApplyConfig(cfg))
+			d.activeTargets = cs.targets
+			ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
+			r.NoError(d.WaitInit(ctx))
+			r.Equal(cs.wantTimeout, ctx.Err() != nil)
+		})
+	}
+
+}
 func TestTargetsDiscovery_ActiveTargets(t *testing.T) {
 	d := New(logrus.New())
 	d.activeTargets = map[string][]*SDTargets{

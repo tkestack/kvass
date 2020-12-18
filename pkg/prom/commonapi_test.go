@@ -18,7 +18,10 @@
 package prom
 
 import (
+	"github.com/stretchr/testify/require"
+	"io/ioutil"
 	"net/http"
+	"path"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -35,31 +38,37 @@ global:
 `
 
 func TestApiReloadConfig(t *testing.T) {
+	r := require.New(t)
 	e := gin.Default()
-	c := make(chan *config.Config, 10)
+	file := path.Join(t.TempDir(), "config.yaml")
+	r.NoError(ioutil.WriteFile(file, []byte(configTest), 0777))
+
+	reload := false
+	apply := []func(cfg *config.Config) error{
+		func(cfg *config.Config) error {
+			reload = true
+			r.NotNil(cfg)
+			return nil
+		},
+	}
+
 	e.POST("/-/reload", api.Wrap(logrus.New(), func(ctx *gin.Context) *api.Result {
-		return APIReloadConfig(func() (bytes []byte, e error) {
-			return []byte(configTest), nil
-		}, c)
+		return APIReloadConfig(logrus.New(), file, apply)
 	}))
 
 	_ = api.TestCall(t, e.ServeHTTP, "/-/reload", http.MethodPost, "", nil)
-	select {
-	case <-c:
-		return
-	default:
-		t.Fatalf("config reload not triggered")
-	}
+	r.True(reload)
 }
 
 func TestConfig(t *testing.T) {
+	r := require.New(t)
 	e := gin.Default()
+	file := path.Join(t.TempDir(), "config.yaml")
+	r.NoError(ioutil.WriteFile(file, []byte(configTest), 0777))
 	e.GET("/api/v1/status/config", api.Wrap(logrus.New(), func(ctx *gin.Context) *api.Result {
-		return APIReadConfig(func() (bytes []byte, e error) {
-			return []byte(configTest), nil
-		})
+		return APIReadConfig(file)
 	}))
 	ret := map[string]string{}
-	r := api.TestCall(t, e.ServeHTTP, "/api/v1/status/config", http.MethodGet, "", &ret)
+	_ = api.TestCall(t, e.ServeHTTP, "/api/v1/status/config", http.MethodGet, "", &ret)
 	r.Equal(configTest, ret["yaml"])
 }

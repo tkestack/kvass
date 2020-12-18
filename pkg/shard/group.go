@@ -20,26 +20,16 @@ package shard
 import (
 	"fmt"
 	"sync"
-	"time"
 	"tkestack.io/kvass/pkg/target"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
 
-// RuntimeInfo contains all running status of this shard
-type RuntimeInfo struct {
-	// HeadSeries return current head_series of prometheus
-	HeadSeries int64 `json:"headSeries"`
-	// IdleAt is the time this shard become idle
-	// it is nil if this shard is not idle
-	// TODO: user IdleAt to support shard scaling down
-	IdleAt *time.Time `json:"idleAt,omitempty"`
-}
-
 // Group is a shard group contains one or more replicates
 // it knows how to communicate with shard sidecar and manager local scraping cache
 type Group struct {
+	// ID is the unique ID of this group
 	ID         string
 	log        logrus.FieldLogger
 	replicates []*Replicas
@@ -141,13 +131,17 @@ func (s *Group) TargetStatus() (map[uint64]*target.ScrapeStatus, error) {
 // UpdateTarget update the scraping targets of this Group
 // every Replicas will compare the new targets to it's targets scraping cache and decide if communicate with sidecar or not,
 // request will be send to sidecar only if new activeTargets not eq to the scraping
-func (s *Group) UpdateTarget(targets map[string][]*target.Target) error {
+func (s *Group) UpdateTarget(request *UpdateTargetsRequest) error {
 	return s.shardsDo(func(sd *Replicas) error {
-		return sd.updateTarget(targets)
+		return sd.updateTarget(request)
 	})
 }
 
 func (s *Group) shardsDo(f func(sd *Replicas) error) error {
+	if len(s.replicates) == 0 {
+		return fmt.Errorf("no avaliable replicas found in group %s", s.ID)
+	}
+
 	g := errgroup.Group{}
 	success := false
 	for _, tsd := range s.replicates {

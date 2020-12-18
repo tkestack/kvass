@@ -20,13 +20,14 @@ package prom
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/prometheus/config"
-	"gopkg.in/yaml.v2"
+	"github.com/sirupsen/logrus"
+	"io/ioutil"
 	"tkestack.io/kvass/pkg/api"
 )
 
 // APIReadConfig is the default implementation of api /api/v1/status/config
-func APIReadConfig(readConfig func() ([]byte, error)) *api.Result {
-	data, err := readConfig()
+func APIReadConfig(file string) *api.Result {
+	data, err := ioutil.ReadFile(file)
 	if err != nil {
 		return api.InternalErr(err, "can not read config")
 	}
@@ -37,21 +38,17 @@ func APIReadConfig(readConfig func() ([]byte, error)) *api.Result {
 }
 
 // APIReloadConfig is the default implementation of api /-/reload
-func APIReloadConfig(readConfig func() ([]byte, error), notify chan *config.Config) *api.Result {
-	var (
-		err  error
-		data []byte
-	)
-	data, err = readConfig()
+func APIReloadConfig(log logrus.FieldLogger, file string, apply []func(cfg *config.Config) error) *api.Result {
+	cfg, err := config.LoadFile(file)
 	if err != nil {
-		return api.InternalErr(err, "read config")
+		return api.InternalErr(err, "load file")
 	}
 
-	cfg := &config.Config{}
-	if err := yaml.Unmarshal(data, cfg); err != nil {
-		return api.InternalErr(err, "unmarshal config")
+	for _, f := range apply {
+		if err := f(cfg); err != nil {
+			return api.InternalErr(err, "apply config")
+		}
 	}
-
-	notify <- cfg
+	log.Infof("config reloaded")
 	return api.Data(nil)
 }

@@ -17,10 +17,26 @@
 
 package shard
 
+import (
+	"tkestack.io/kvass/pkg/target"
+)
+
 // Manager known how to create or delete Shards
 type Manager interface {
 	// Shards return current Shards in the cluster
 	Shards() ([]*Group, error)
 	// ChangeScale create or delete Shards according to "expReplicate"
 	ChangeScale(expReplicate int32) error
+}
+
+// RuntimeInfo contains all running status of this shard
+type RuntimeInfo struct {
+	// HeadSeries return current head_series of prometheus
+	HeadSeries int64 `json:"headSeries"`
+}
+
+// UpdateTargetsRequest contains all information about the targets updating request
+type UpdateTargetsRequest struct {
+	// targets contains all targets this shard should scrape
+	Targets map[string][]*target.Target
 }

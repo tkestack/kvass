@@ -34,7 +34,7 @@ type fakeShardsManager struct {
 	targetStatus map[uint64]*target.ScrapeStatus
 
 	resultRep           int32
-	resultUpdateTargets map[string][]*target.Target
+	resultUpdateTargets shard.UpdateTargetsRequest
 }
 
 // Shards return current Shards in the cluster
@@ -50,7 +50,6 @@ func (f *fakeShardsManager) Shards() ([]*shard.Group, error) {
 		return test.CopyJSON(ret, dm[url])
 	}
 	rep.APIPost = func(url string, req interface{}, ret interface{}) (err error) {
-		f.resultUpdateTargets = map[string][]*target.Target{}
 		return test.CopyJSON(&f.resultUpdateTargets, req)
 	}
 	return []*shard.Group{g}, nil
@@ -206,7 +205,7 @@ func TestCoordinator_RunOnce(t *testing.T) {
 			)
 			r.NoError(c.RunOnce())
 			r.Equal(cs.wantRep, cs.shardManager.resultRep)
-			r.Equal(test.MustJSON(cs.wantUpdateTargets), test.MustJSON(cs.shardManager.resultUpdateTargets))
+			r.Equal(test.MustJSON(cs.wantUpdateTargets), test.MustJSON(cs.shardManager.resultUpdateTargets.Targets))
 		})
 	}
 }

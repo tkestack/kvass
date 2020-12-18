@@ -31,7 +31,7 @@ import (
 	"tkestack.io/kvass/pkg/target"
 )
 
-func TestTargets(t *testing.T) {
+func TestAPI_Targets(t *testing.T) {
 	getScrapeStatus := func(targets map[string][]*discovery.SDTargets) (statuses map[uint64]*target.ScrapeStatus, e error) {
 		return map[uint64]*target.ScrapeStatus{
 			1: {
@@ -76,7 +76,7 @@ func TestTargets(t *testing.T) {
 		}
 	}
 
-	a := NewAPI(nil, getScrapeStatus, getActive, getDrop, logrus.New())
+	a := NewService("", nil, getScrapeStatus, getActive, getDrop, logrus.New())
 	res := &v1.TargetDiscovery{}
 	r := api.TestCall(t, a.Engine.ServeHTTP, "/api/v1/targets", http.MethodGet, "", res)
 	r.Equal("http://127.0.0.1:80", res.ActiveTargets[0].ScrapeURL)

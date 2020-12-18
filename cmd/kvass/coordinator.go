@@ -19,11 +19,14 @@ package main
 
 import (
 	"context"
-	"io/ioutil"
+	k8sd "github.com/prometheus/prometheus/discovery/kubernetes"
+	"net/url"
+	"path"
 	"sync"
 	"time"
 
 	"github.com/go-kit/kit/log"
+	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/prometheus/config"
 	prom_discovery "github.com/prometheus/prometheus/discovery"
@@ -48,11 +51,12 @@ var cdCfg = struct {
 	shardSelector  string
 	shardPort      int
 	shardMaxSeries int64
-	shadMaxShard   int32
+	shardMaxShard  int32
 	exploreMaxCon  int
 	webAddress     string
 	configFile     string
 	syncInterval   time.Duration
+	sdInitTimeout  time.Duration
 	configInject   configInjectOption
 }{}
 
@@ -61,16 +65,16 @@ func init() {
 	coordinatorCmd.Flags().StringVar(&cdCfg.shardSelector, "shard.selector", "app.kubernetes.io/name=prometheus", "label selector for select target StatefulSets")
 	coordinatorCmd.Flags().IntVar(&cdCfg.shardPort, "shard.port", 8080, "the port of sidecar server")
 	coordinatorCmd.Flags().Int64Var(&cdCfg.shardMaxSeries, "shard.max-series", 1000000, "max series of per shard")
-	coordinatorCmd.Flags().Int32Var(&cdCfg.shadMaxShard, "shard.max-shard", 999999, "max shard number")
+	coordinatorCmd.Flags().Int32Var(&cdCfg.shardMaxShard, "shard.max-shard", 999999, "max shard number")
 	coordinatorCmd.Flags().IntVar(&cdCfg.exploreMaxCon, "explore.concurrence", 50, "max explore concurrence")
 	coordinatorCmd.Flags().StringVar(&cdCfg.webAddress, "web.address", ":9090", "server bind address")
 	coordinatorCmd.Flags().StringVar(&cdCfg.configFile, "config.file", "prometheus.yml", "config file path")
 	coordinatorCmd.Flags().DurationVar(&cdCfg.syncInterval, "coordinator.interval", time.Second*10, "the interval of coordinator loop")
+	coordinatorCmd.Flags().DurationVar(&cdCfg.sdInitTimeout, "sd.init-timeout", time.Minute*1, "max time wait for all job first service discovery when coordinator start")
 
 	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.url, "inject.kubernetes-url", "", "kube-apiserver url to inject to all kubernetes sd")
-	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.token, "inject.kubernetes-token", "", "kube-apiserver token to inject to all kubernetes sd")
 	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.proxy, "inject.kubernetes-proxy", "", "ckube-apiserver proxy url to inject to all kubernetes sd")
-
+	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.serviceAccountPath, "inject.kubernetes-sa-path", "", "change default service account token path")
 	rootCmd.AddCommand(coordinatorCmd)
 }
 
@@ -119,82 +123,54 @@ distribution targets to shards`,
 			cd = coordinator.NewCoordinator(
 				ins,
 				cdCfg.shardMaxSeries,
-				cdCfg.shadMaxShard,
+				cdCfg.shardMaxShard,
 				cdCfg.syncInterval,
 				exp.Get,
 				targetDiscovery.ActiveTargets,
 				lg.WithField("component", "coordinator"))
-
-			api = coordinator.NewAPI(
-				func() (bytes []byte, e error) {
-					return ioutil.ReadFile(cdCfg.configFile)
-				},
-				func(targets map[string][]*discovery.SDTargets) (statuses map[uint64]*target.ScrapeStatus, e error) {
-					return getTargetStatus(ins, exp, targets)
-				},
-				targetDiscovery.ActiveTargets,
-				targetDiscovery.DropTargets,
-				lg.WithField("component", "web"),
-			)
 		)
+
+		configApply := []func(cfg *config.Config) error{
+			func(cfg *config.Config) error {
+				return configInject(cfg, &cdCfg.configInject)
+			},
+
+			scrapeManager.ApplyConfig,
+			exp.ApplyConfig,
+			targetDiscovery.ApplyConfig,
+			func(cfg *config.Config) error {
+				c := make(map[string]prom_discovery.Configs)
+				for _, v := range cfg.ScrapeConfigs {
+					c[v.JobName] = v.ServiceDiscoveryConfigs
+				}
+				return discoveryManagerScrape.ApplyConfig(c)
+			},
+		}
+
+		svc := coordinator.NewService(
+			cdCfg.configFile,
+			configApply,
+			func(targets map[string][]*discovery.SDTargets) (statuses map[uint64]*target.ScrapeStatus, e error) {
+				return getTargetStatus(lg, ins, exp, targets)
+			},
+			targetDiscovery.ActiveTargets,
+			targetDiscovery.DropTargets,
+			lg.WithField("component", "web"),
+		)
+
+		if err := svc.Init(); err != nil {
+			lg.Fatalf(err.Error())
+		}
 
 		g := errgroup.Group{}
 		ctx := context.Background()
 
-		configReload := make(chan struct{})
-		configInit := false
-
 		g.Go(func() error {
-			return reloadConfig(ctx, &cdCfg.configInject, api.ConfigReload, lg, []func(cfg *config.Config) error{
-				scrapeManager.ApplyConfig,
-				exp.ApplyConfig,
-				targetDiscovery.ApplyConfig,
-				func(cfg *config.Config) error {
-					c := make(map[string]prom_discovery.Configs)
-					for _, v := range cfg.ScrapeConfigs {
-						c[v.JobName] = v.ServiceDiscoveryConfigs
-					}
-					return discoveryManagerScrape.ApplyConfig(c)
-				},
-				func(cfg *config.Config) error {
-					if !configInit {
-						close(configReload)
-						configInit = true
-					}
-
-					lg.Infof("config reload completed")
-					return nil
-				},
-			})
-		})
-
-		g.Go(func() error {
-			<-configReload
 			lg.Infof("SD start")
 			return discoveryManagerScrape.Run()
 		})
 
 		g.Go(func() error {
-			<-configReload
-			lg.Infof("coordinator start")
-
-			return cd.Run(ctx)
-		})
-
-		g.Go(func() error {
-			<-configReload
-			lg.Infof("api start at %s", cdCfg.webAddress)
-			return api.Run(cdCfg.webAddress)
-		})
-
-		g.Go(func() error {
-			<-configReload
-			lg.Infof("explore start")
-			return exp.Run(ctx, cdCfg.exploreMaxCon)
-		})
-
-		g.Go(func() error {
-			<-configReload
 			lg.Infof("targetDiscovery start")
 			return targetDiscovery.Run(ctx, discoveryManagerScrape.SyncCh())
 		})
@@ -206,12 +182,31 @@ distribution targets to shards`,
 			}
 		})
 
-		api.ConfigReload <- initConfig(cdCfg.configFile)
+		g.Go(func() error {
+			lg.Infof("explore start")
+			return exp.Run(ctx, cdCfg.exploreMaxCon)
+		})
+
+		tCtx, _ := context.WithTimeout(ctx, cdCfg.sdInitTimeout)
+		if err := targetDiscovery.WaitInit(tCtx); err != nil {
+			panic(err)
+		}
+
+		g.Go(func() error {
+			lg.Infof("coordinator start")
+			return cd.Run(ctx)
+		})
+
+		g.Go(func() error {
+			lg.Infof("api start at %s", cdCfg.webAddress)
+			return svc.Run(cdCfg.webAddress)
+		})
+
 		return g.Wait()
 	},
 }
 
-func getTargetStatus(manager shard.Manager, exp *explore.Explore, targets map[string][]*discovery.SDTargets) (statuses map[uint64]*target.ScrapeStatus, e error) {
+func getTargetStatus(lg logrus.FieldLogger, manager shard.Manager, exp *explore.Explore, targets map[string][]*discovery.SDTargets) (statuses map[uint64]*target.ScrapeStatus, e error) {
 	shards, err := manager.Shards()
 	if err != nil {
 		return nil, err
@@ -220,7 +215,8 @@ func getTargetStatus(manager shard.Manager, exp *explore.Explore, targets map[st
 	global := map[uint64]*target.ScrapeStatus{}
 	l := sync.Mutex{}
 	g := errgroup.Group{}
-	for _, s := range shards {
+	for _, temp := range shards {
+		s := temp
 		g.Go(func() error {
 			res, err := s.TargetStatus()
 			if err != nil {
@@ -235,12 +231,15 @@ func getTargetStatus(manager shard.Manager, exp *explore.Explore, targets map[st
 		})
 	}
 
+	_ = g.Wait()
+
 	ret := map[uint64]*target.ScrapeStatus{}
 	for job, ts := range targets {
 		for _, t := range ts {
 			hash := t.ShardTarget.Hash
 			rt := global[hash]
 			if rt == nil {
+				lg.Infof("%d not found in global", hash)
 				rt = exp.Get(job, hash)
 			}
 			ret[hash] = rt
@@ -248,4 +247,61 @@ func getTargetStatus(manager shard.Manager, exp *explore.Explore, targets map[st
 	}
 
 	return ret, nil
+}
+
+type configInjectOption struct {
+	kubernetes struct {
+		url                string
+		serviceAccountPath string
+		proxy              string
+	}
+}
+
+func configInject(cfg *config.Config, option *configInjectOption) error {
+	if option == nil {
+		return nil
+	}
+	for _, job := range cfg.ScrapeConfigs {
+		for _, sd := range job.ServiceDiscoveryConfigs {
+			ksd, ok := sd.(*k8sd.SDConfig)
+			if ok {
+				if ksd.APIServer.URL != nil {
+					continue
+				}
+
+				if option.kubernetes.url != "" {
+					u, _ := url.Parse(option.kubernetes.url)
+					ksd.APIServer = config_util.URL{URL: u}
+				}
+
+				if option.kubernetes.proxy != "" {
+					u, _ := url.Parse(option.kubernetes.proxy)
+					ksd.HTTPClientConfig.ProxyURL = config_util.URL{URL: u}
+				}
+
+				if option.kubernetes.serviceAccountPath != "" {
+					if ksd.HTTPClientConfig.TLSConfig.CAFile == "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" ||
+						ksd.HTTPClientConfig.TLSConfig.CAFile == "" {
+						ksd.HTTPClientConfig.TLSConfig.CAFile = path.Join(option.kubernetes.serviceAccountPath, "ca.crt")
+					}
+					if ksd.HTTPClientConfig.BearerTokenFile == "/var/run/secrets/kubernetes.io/serviceaccount/token" ||
+						ksd.HTTPClientConfig.BearerTokenFile == "" {
+						ksd.HTTPClientConfig.BearerTokenFile = path.Join(option.kubernetes.serviceAccountPath, "token")
+					}
+				}
+			}
+		}
+
+		if option.kubernetes.serviceAccountPath != "" {
+			if job.HTTPClientConfig.TLSConfig.CAFile == "" {
+				if job.HTTPClientConfig.TLSConfig.CAFile == "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" {
+					job.HTTPClientConfig.TLSConfig.CAFile = path.Join(option.kubernetes.serviceAccountPath, "ca.crt")
+				}
+				if job.HTTPClientConfig.BearerTokenFile == "/var/run/secrets/kubernetes.io/serviceaccount/token" {
+					job.HTTPClientConfig.BearerTokenFile = path.Join(option.kubernetes.serviceAccountPath, "token")
+				}
+			}
+		}
+	}
+	return nil
 }

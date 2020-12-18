@@ -33,7 +33,7 @@ type ScrapeStatus struct {
 	// Health it the status of last scraping
 	Health scrape.TargetHealth `json:"health"`
 	// Series is the avg sample of last 3 times scraping, metrics_relabel_configs will be process
-	Series     int64 `json:"samples"`
+	Series     int64 `json:"series"`
 	lastSeries []int64
 }
 

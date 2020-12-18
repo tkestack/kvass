@@ -18,9 +18,7 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
-	"io/ioutil"
+	"path"
 	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/sidecar"
 	"tkestack.io/kvass/pkg/target"
@@ -40,8 +38,9 @@ var sidecarCfg = struct {
 	proxyAddress   string
 	apiAddress     string
 	prometheusURL  string
-	targetFile     string
+	storePath      string
 	injectProxyURL string
+	configInject   configInjectOption
 }{}
 
 func init() {
@@ -50,8 +49,9 @@ func init() {
 	sidecarCmd.Flags().StringVar(&sidecarCfg.prometheusURL, "prometheus.url", "http://127.0.0.1:9090", "url of target prometheus")
 	sidecarCmd.Flags().StringVar(&sidecarCfg.configFile, "config.file", "/etc/prometheus/config_out/prometheus.env.yaml", "origin config file")
 	sidecarCmd.Flags().StringVar(&sidecarCfg.configOutFile, "config.output-file", "/etc/prometheus/config_out/prometheus_injected.yaml", "injected config file")
-	sidecarCmd.Flags().StringVar(&sidecarCfg.targetFile, "config.target-file", "/prometheus/targets.json", "file to save scraping targets")
+	sidecarCmd.Flags().StringVar(&sidecarCfg.storePath, "store.path", "/prometheus/", "path to save shard runtime")
 	sidecarCmd.Flags().StringVar(&sidecarCfg.injectProxyURL, "inject.proxy", "http://127.0.0.1:8008", "proxy url to inject to all job")
+	sidecarCmd.Flags().StringVar(&sidecarCfg.configInject.kubernetes.serviceAccountPath, "inject.kubernetes-sa-path", "", "change default service account token path")
 	rootCmd.AddCommand(sidecarCmd)
 }
 
@@ -65,92 +65,78 @@ var sidecarCmd = &cobra.Command{
 		}
 		var (
 			lg            = log.New()
-			ctx           = context.Background()
 			scrapeManager = scrape.New()
 			proxy         = sidecar.NewProxy(scrapeManager, log.WithField("component", "target manager"))
 			injector      = sidecar.NewInjector(sidecarCfg.configFile, sidecarCfg.configOutFile, sidecar.InjectConfigOptions{
 				ProxyURL: sidecarCfg.injectProxyURL,
 			}, lg.WithField("component", "injector"))
 			promCli = prom.NewClient(sidecarCfg.prometheusURL)
-			wb      = sidecar.NewAPI(
-				sidecarCfg.prometheusURL,
-				func() (bytes []byte, e error) {
-					return ioutil.ReadFile(sidecarCfg.configFile)
-				},
-				promCli.RuntimeInfo,
-				proxy.TargetStatus,
-				log.WithField("component", "web"),
-			)
 		)
 
-		configLoaded := make(chan interface{})
-		configInit := false
-		targetsLoaded := make(chan interface{})
-		targetsInit := false
+		applyConfigReload := []func(cfg *config.Config) error{
+			func(cfg *config.Config) error {
+				return configInjectSidecar(cfg, &sidecarCfg.configInject)
+			},
+			scrapeManager.ApplyConfig,
+			func(cfg *config.Config) error {
+				return injector.UpdateConfig()
+			},
+			func(cfg *config.Config) error {
+				return promCli.ConfigReload()
+			},
+		}
+
+		applyTargetsUpdated := []func(map[string][]*target.Target) error{
+			proxy.UpdateTargets,
+			injector.UpdateTargets,
+			func(map[string][]*target.Target) error {
+				return promCli.ConfigReload()
+			},
+		}
+
+		service := sidecar.NewService(
+			sidecarCfg.prometheusURL,
+			sidecarCfg.configFile,
+			sidecarCfg.storePath,
+			applyConfigReload,
+			applyTargetsUpdated,
+			promCli.RuntimeInfo,
+			proxy.TargetStatus,
+			log.WithField("component", "web"),
+		)
+
+		if err := service.Init(); err != nil {
+			panic(err)
+		}
 
 		g := errgroup.Group{}
 		g.Go(func() error {
-			<-configLoaded
-			<-targetsLoaded
 			lg.Infof("proxy start at %s", sidecarCfg.proxyAddress)
 			return proxy.Run(sidecarCfg.proxyAddress)
 		})
 		g.Go(func() error {
-			<-configLoaded
-			<-targetsLoaded
-			lg.Infof("web start at %s", sidecarCfg.apiAddress)
-			return wb.Run(sidecarCfg.apiAddress)
+			lg.Infof("sidecar server start at %s", sidecarCfg.apiAddress)
+			return service.Run(sidecarCfg.apiAddress)
 		})
-
-		g.Go(func() error {
-			return reloadConfig(ctx, nil, wb.ConfigReload, lg, []func(cfg *config.Config) error{
-				scrapeManager.ApplyConfig,
-				func(cfg *config.Config) error {
-					return injector.UpdateConfig()
-				},
-				func(cfg *config.Config) error {
-					return promCli.ConfigReload()
-				},
-				func(cfg *config.Config) error {
-					if !configInit {
-						close(configLoaded)
-						configInit = true
-					}
-					lg.Infof("config reload completed")
-					return nil
-				},
-			})
-		})
-
-		g.Go(func() error {
-			return reloadTargets(ctx, wb.TargetReload, lg, []func(map[string][]*target.Target) error{
-				proxy.UpdateTargets,
-				injector.UpdateTargets,
-				func(map[string][]*target.Target) error {
-					return promCli.ConfigReload()
-				},
-
-				func(targets map[string][]*target.Target) error {
-					data, err := json.Marshal(&targets)
-					if err != nil {
-						return err
-					}
-					return ioutil.WriteFile(sidecarCfg.targetFile, data, 0755)
-				},
-
-				func(targets map[string][]*target.Target) error {
-					if !targetsInit {
-						close(targetsLoaded)
-						targetsInit = true
-					}
-					lg.Infof("target updated completed")
-					return nil
-				},
-			})
-		})
-
-		wb.ConfigReload <- initConfig(sidecarCfg.configFile)
-		wb.TargetReload <- initTargets(sidecarCfg.targetFile)
 		return g.Wait()
 	},
+}
+
+func configInjectSidecar(cfg *config.Config, option *configInjectOption) error {
+	if option == nil {
+		return nil
+	}
+	for _, job := range cfg.ScrapeConfigs {
+		if option.kubernetes.serviceAccountPath != "" {
+			if job.HTTPClientConfig.TLSConfig.CAFile == "" {
+				if job.HTTPClientConfig.TLSConfig.CAFile == "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" {
+					job.HTTPClientConfig.TLSConfig.CAFile = path.Join(option.kubernetes.serviceAccountPath, "ca.crt")
+				}
+				if job.HTTPClientConfig.BearerTokenFile == "/var/run/secrets/kubernetes.io/serviceaccount/token" {
+					job.HTTPClientConfig.BearerTokenFile = path.Join(option.kubernetes.serviceAccountPath, "token")
+				}
+			}
+		}
+	}
+	return nil
 }

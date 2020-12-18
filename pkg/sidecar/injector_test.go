@@ -88,7 +88,6 @@ remote_read:
 	r.Equal(model.LabelValue("https"), outSD.Labels[model.ParamLabelPrefix+paramScheme])
 	r.Equal(model.LabelValue("job"), outSD.Labels[model.ParamLabelPrefix+paramJobName])
 	r.Equal(model.LabelValue("1"), outSD.Labels[model.ParamLabelPrefix+paramHash])
-	r.Equal("job", string(outJob.HTTPClientConfig.BearerToken))
 	r.Equal("write", string(out.RemoteWriteConfigs[0].HTTPClientConfig.BearerToken))
 	r.Equal("read", string(out.RemoteReadConfigs[0].HTTPClientConfig.BearerToken))
 }
