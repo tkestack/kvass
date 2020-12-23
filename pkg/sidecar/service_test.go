@@ -165,11 +165,22 @@ func TestService_runtimeInfo(t *testing.T) {
 			name:           "user prometheus runtime as head series info directly",
 			promRuntime:    &prom.RuntimeInfo{TimeSeriesCount: 100},
 			targetStatus:   map[uint64]*target.ScrapeStatus{},
-			wantHeadSeries: 100,
+			wantHeadSeries: 0,
 		},
 		{
 			name:        "forecast head series if target has not begun to be scraped",
 			promRuntime: &prom.RuntimeInfo{TimeSeriesCount: 0},
+			targetStatus: map[uint64]*target.ScrapeStatus{
+				1: {
+					Health: scrape.HealthUnknown,
+					Series: 100,
+				},
+			},
+			wantHeadSeries: 0,
+		},
+		{
+			name:        "forecast head series if target has not begun to be scraped",
+			promRuntime: &prom.RuntimeInfo{TimeSeriesCount: 200},
 			targetStatus: map[uint64]*target.ScrapeStatus{
 				1: {
 					Health: scrape.HealthUnknown,
