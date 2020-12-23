@@ -143,7 +143,7 @@ func (s *Service) runtimeInfo(g *gin.Context) *api.Result {
 		min += r.Series
 	}
 
-	if r.TimeSeriesCount < min {
+	if r.TimeSeriesCount > min {
 		r.TimeSeriesCount = min
 	}
 	return api.Data(&shard.RuntimeInfo{
