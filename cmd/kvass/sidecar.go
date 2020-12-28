@@ -41,6 +41,8 @@ var sidecarCfg = struct {
 	storePath      string
 	injectProxyURL string
 	configInject   configInjectOption
+	remoteWriteURL string
+	remoteReadURL  string
 }{}
 
 func init() {
@@ -52,6 +54,10 @@ func init() {
 	sidecarCmd.Flags().StringVar(&sidecarCfg.storePath, "store.path", "/prometheus/", "path to save shard runtime")
 	sidecarCmd.Flags().StringVar(&sidecarCfg.injectProxyURL, "inject.proxy", "http://127.0.0.1:8008", "proxy url to inject to all job")
 	sidecarCmd.Flags().StringVar(&sidecarCfg.configInject.kubernetes.serviceAccountPath, "inject.kubernetes-sa-path", "", "change default service account token path")
+	sidecarCmd.Flags().StringVar(&sidecarCfg.remoteWriteURL, "remote-write-url",
+		"", "prometheus remote write url")
+	sidecarCmd.Flags().StringVar(&sidecarCfg.remoteReadURL, "remote-read-url",
+		"", "prometheus remote write url")
 	rootCmd.AddCommand(sidecarCmd)
 }
 
@@ -69,7 +75,8 @@ var sidecarCmd = &cobra.Command{
 			proxy         = sidecar.NewProxy(scrapeManager, log.WithField("component", "target manager"))
 			injector      = sidecar.NewInjector(sidecarCfg.configFile, sidecarCfg.configOutFile, sidecar.InjectConfigOptions{
 				ProxyURL: sidecarCfg.injectProxyURL,
-			}, lg.WithField("component", "injector"))
+			}, sidecarCfg.remoteWriteURL, sidecarCfg.remoteReadURL,
+				lg.WithField("component", "injector"))
 			promCli = prom.NewClient(sidecarCfg.prometheusURL)
 		)
 
