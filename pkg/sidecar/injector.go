@@ -19,20 +19,16 @@ package sidecar
 
 import (
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/discovery"
-	"github.com/uber/jaeger-client-go/crossdock/server"
+	"github.com/prometheus/prometheus/discovery/targetgroup"
+	"github.com/prometheus/prometheus/pkg/relabel"
 	"io/ioutil"
 	"net/url"
 	"os"
 	"strings"
 	"sync"
 	"tkestack.io/kvass/pkg/target"
-
-	"github.com/prometheus/prometheus/pkg/relabel"
-
-	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/discovery/targetgroup"
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/sirupsen/logrus"

@@ -1,9 +1,15 @@
-PROJECT_NAME := "tkestack.io/kvass"
 PKG := "./"
 PKG_LIST := $(shell go list ${PKG}/... | grep -v /vendor/)
 GO_FILES := $(shell find . -name '*.go' | grep -v /vendor/ | grep -v _test.go)
 
-.PHONY: all dep lint vet test test-coverage build clean
+VERSION :=v0.0.3
+BUILD_TIME := $(shell date +%Y%m%d%H%M%S)
+GIT_COMMIT=$(shell git rev-parse HEAD)
+
+BUILD_VERSION := $(BUILD_TIME).$(GIT_COMMIT)
+IMAGE_NAME = woshiaotian/kvass:$(VERSION).$(BUILD_VERSION)
+
+.PHONY: all dep lint vet test test-coverage build clean build-linux image
 
 all: build
 
@@ -25,6 +31,15 @@ test-coverage: ## Run tests with coverage
 
 build: dep ## Build the binary file
 	@go build -i -o kvass cmd/kvass/*.go
+
+build-linux:
+	@echo "building ${BIN_NAME} ${VERSION}"
+	@echo "GOPATH=${GOPATH}"
+    @CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -i -o kvass cmd/kvass/*.go
+
+image: build-linux
+	@docker build -f ./Dockerfile --rm -t ${IMAGE_NAME} .
+
 
 clean: ## Remove previous build
 	@rm -fr kvass

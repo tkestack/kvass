@@ -63,7 +63,7 @@ remote_read:
 
 	r := require.New(t)
 	in := NewInjector("", "",
-		InjectConfigOptions{ProxyURL: "http://127.0.0.1:8008"}, logrus.New())
+		InjectConfigOptions{ProxyURL: "http://127.0.0.1:8008"}, "", "", logrus.New())
 
 	out := &config.Config{}
 	in.readFile = func(file string) (bytes []byte, e error) {
