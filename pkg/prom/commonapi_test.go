@@ -27,14 +27,33 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/prometheus/config"
 
+	_ "github.com/prometheus/prometheus/discovery/install"
 	"github.com/sirupsen/logrus"
 	"tkestack.io/kvass/pkg/api"
 )
 
 const configTest = `
 global:
-  scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
-  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+  evaluation_interval: 30s
+  scrape_interval: 15s
+  external_labels:
+    cluster_type: none
+rule_files: []
+scrape_configs:
+- job_name: polarisSd
+  honor_timestamps: true
+  scrape_interval: 5s
+  metrics_path: /metrics
+  scheme: http
+  file_sd_configs:
+  - files:
+    - /etc/prometheus/secrets/prom-sd-conf/polarisSd.json
+    refresh_interval: 5s
+alerting:
+  alert_relabel_configs:
+  - action: labeldrop
+    regex: prometheus_replica
+  alertmanagers: []
 `
 
 func TestApiReloadConfig(t *testing.T) {

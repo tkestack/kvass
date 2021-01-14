@@ -19,12 +19,12 @@ package main
 
 import (
 	"fmt"
+	"github.com/gin-gonic/gin"
+	_ "github.com/prometheus/prometheus/discovery/install"
+	"github.com/spf13/cobra"
 	"math/rand"
 	"os"
 	"time"
-
-	"github.com/gin-gonic/gin"
-	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
