@@ -130,6 +130,9 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// send origin result to prometheus
 	if _, err := io.Copy(w, bytes.NewBuffer(data)); err != nil {
 		scrapErr = fmt.Errorf("copy data to prometheus failed %v", err)
+		if time.Now().Sub(start) > time.Duration(jobInfo.Config.ScrapeTimeout) {
+			scrapErr = fmt.Errorf("scrape timeout")
+		}
 		return
 	}
 

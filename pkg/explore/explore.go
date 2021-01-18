@@ -142,6 +142,7 @@ func (e *Explore) Run(ctx context.Context, con int) error {
 					hash := tar.target.Hash
 					err := e.exploreOnce(ctx, tar)
 					if err != nil {
+						e.logger.Error(err.Error())
 						go func() {
 							time.Sleep(e.retryInterval)
 							e.targetsLock.Lock()
