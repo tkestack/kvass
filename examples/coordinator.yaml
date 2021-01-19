@@ -52,7 +52,7 @@ spec:
               name: config-out
             - mountPath: /etc/prometheus/config
               name: config
-        - image: tkestack/kvass:v0.0.3
+        - image: tkestack/kvass:latest
           imagePullPolicy: Always
           args:
             - coordinator
