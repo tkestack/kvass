@@ -157,6 +157,13 @@ func (i *Injector) UpdateConfig() error {
 	}
 	if i.option.PrometheusURL != "" {
 		u, _ := url.Parse(i.option.PrometheusURL)
+		podName := os.Getenv("POD_NAME")
+		ss := strings.Split(podName, "-")
+		shard := "0"
+		if len(ss) > 0 {
+			shard = ss[len(ss)-1]
+		}
+
 		cfg.ScrapeConfigs = append(cfg.ScrapeConfigs, &config.ScrapeConfig{
 			JobName: "prometheus_shards",
 			ServiceDiscoveryConfigs: []discovery.Config{
@@ -168,7 +175,8 @@ func (i *Injector) UpdateConfig() error {
 							},
 						},
 						Labels: map[model.LabelName]model.LabelValue{
-							"pod": model.LabelValue(os.Getenv("POD_NAME")),
+							"replicate": model.LabelValue(podName),
+							"shard":     model.LabelValue(shard),
 						},
 					},
 				}),
