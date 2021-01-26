@@ -68,7 +68,8 @@ var sidecarCmd = &cobra.Command{
 			scrapeManager = scrape.New()
 			proxy         = sidecar.NewProxy(scrapeManager, log.WithField("component", "target manager"))
 			injector      = sidecar.NewInjector(sidecarCfg.configFile, sidecarCfg.configOutFile, sidecar.InjectConfigOptions{
-				ProxyURL: sidecarCfg.injectProxyURL,
+				ProxyURL:      sidecarCfg.injectProxyURL,
+				PrometheusURL: sidecarCfg.prometheusURL,
 			}, lg.WithField("component", "injector"))
 			promCli = prom.NewClient(sidecarCfg.prometheusURL)
 		)

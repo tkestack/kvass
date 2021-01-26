@@ -48,8 +48,10 @@ const (
 
 // InjectConfigOptions indicate what to inject to config file
 type InjectConfigOptions struct {
-	// ProxyURL will be inject to all job if it is not empty
+	// ProxyURL will be injected to all job if it is not empty
 	ProxyURL string
+	// PrometheusURL will be injected
+	PrometheusURL string
 }
 
 // Injector gen injected config file
@@ -152,6 +154,25 @@ func (i *Injector) UpdateConfig() error {
 		if w.HTTPClientConfig.BasicAuth != nil && w.HTTPClientConfig.BasicAuth.Password != "" {
 			password = append(password, string(w.HTTPClientConfig.BasicAuth.Password))
 		}
+	}
+	if i.option.PrometheusURL != "" {
+		u, _ := url.Parse(i.option.PrometheusURL)
+		cfg.ScrapeConfigs = append(cfg.ScrapeConfigs, &config.ScrapeConfig{
+			JobName: "prometheus_shards",
+			ServiceDiscoveryConfigs: []discovery.Config{
+				discovery.StaticConfig([]*targetgroup.Group{
+					{
+						Targets: []model.LabelSet{
+							{
+								model.AddressLabel: model.LabelValue(u.Host),
+							},
+						},
+						Labels: map[model.LabelName]model.LabelValue{
+							"pod": model.LabelValue(os.Getenv("POD_NAME")),
+						},
+					},
+				}),
+			}})
 	}
 
 	gen, err := yaml.Marshal(&cfg)
