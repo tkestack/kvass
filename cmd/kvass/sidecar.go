@@ -66,49 +66,56 @@ var sidecarCmd = &cobra.Command{
 		var (
 			lg            = log.New()
 			scrapeManager = scrape.New()
-			proxy         = sidecar.NewProxy(scrapeManager, log.WithField("component", "target manager"))
-			injector      = sidecar.NewInjector(sidecarCfg.configFile, sidecarCfg.configOutFile, sidecar.InjectConfigOptions{
+			configManager = prom.NewConfigManager(sidecarCfg.configFile, log.WithField("component", "config manager"))
+			targetManager = sidecar.NewTargetsManager(sidecarCfg.storePath, log.WithField("component", "targets manager"))
+
+			proxy = sidecar.NewProxy(
+				scrapeManager.GetJob,
+				func() map[uint64]*target.ScrapeStatus {
+					return targetManager.TargetsInfo().Status
+				},
+				log.WithField("component", "target manager"))
+
+			injector = sidecar.NewInjector(sidecarCfg.configOutFile, sidecar.InjectConfigOptions{
 				ProxyURL:      sidecarCfg.injectProxyURL,
 				PrometheusURL: sidecarCfg.prometheusURL,
 			}, lg.WithField("component", "injector"))
 			promCli = prom.NewClient(sidecarCfg.prometheusURL)
 		)
 
-		applyConfigReload := []func(cfg *config.Config) error{
-			func(cfg *config.Config) error {
-				return configInjectSidecar(cfg, &sidecarCfg.configInject)
+		configManager.AddReloadCallbacks(
+			func(cfg *prom.ConfigInfo) error {
+				return configInjectSidecar(cfg.Config, &sidecarCfg.configInject)
 			},
 			scrapeManager.ApplyConfig,
-			func(cfg *config.Config) error {
-				return injector.UpdateConfig()
-			},
-			func(cfg *config.Config) error {
+			injector.ApplyConfig,
+			func(cfg *prom.ConfigInfo) error {
 				return promCli.ConfigReload()
-			},
-		}
+			})
 
-		applyTargetsUpdated := []func(map[string][]*target.Target) error{
-			proxy.UpdateTargets,
+		targetManager.AddUpdateCallbacks(
 			injector.UpdateTargets,
 			func(map[string][]*target.Target) error {
 				return promCli.ConfigReload()
-			},
-		}
+			})
 
 		service := sidecar.NewService(
 			sidecarCfg.prometheusURL,
-			sidecarCfg.configFile,
-			sidecarCfg.storePath,
-			applyConfigReload,
-			applyTargetsUpdated,
 			promCli.RuntimeInfo,
-			proxy.TargetStatus,
+			configManager,
+			targetManager,
 			log.WithField("component", "web"),
 		)
 
-		if err := service.Init(); err != nil {
+		if err := configManager.Reload(); err != nil {
 			panic(err)
 		}
+		lg.Infof("load config done")
+
+		if err := targetManager.Load(); err != nil {
+			panic(err)
+		}
+		lg.Infof("load targets done")
 
 		g := errgroup.Group{}
 		g.Go(func() error {
@@ -129,13 +136,11 @@ func configInjectSidecar(cfg *config.Config, option *configInjectOption) error {
 	}
 	for _, job := range cfg.ScrapeConfigs {
 		if option.kubernetes.serviceAccountPath != "" {
-			if job.HTTPClientConfig.TLSConfig.CAFile == "" {
-				if job.HTTPClientConfig.TLSConfig.CAFile == "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" {
-					job.HTTPClientConfig.TLSConfig.CAFile = path.Join(option.kubernetes.serviceAccountPath, "ca.crt")
-				}
-				if job.HTTPClientConfig.BearerTokenFile == "/var/run/secrets/kubernetes.io/serviceaccount/token" {
-					job.HTTPClientConfig.BearerTokenFile = path.Join(option.kubernetes.serviceAccountPath, "token")
-				}
+			if job.HTTPClientConfig.TLSConfig.CAFile == "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" {
+				job.HTTPClientConfig.TLSConfig.CAFile = path.Join(option.kubernetes.serviceAccountPath, "ca.crt")
+			}
+			if job.HTTPClientConfig.BearerTokenFile == "/var/run/secrets/kubernetes.io/serviceaccount/token" {
+				job.HTTPClientConfig.BearerTokenFile = path.Join(option.kubernetes.serviceAccountPath, "token")
 			}
 		}
 	}

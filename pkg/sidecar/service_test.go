@@ -17,105 +17,22 @@
 package sidecar
 
 import (
-	"encoding/json"
+	"fmt"
 	"github.com/gin-gonic/gin"
-	"github.com/prometheus/prometheus/config"
-	"github.com/prometheus/prometheus/scrape"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path"
+	"strings"
 	"testing"
-	"time"
 	"tkestack.io/kvass/pkg/api"
 	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/shard"
 	"tkestack.io/kvass/pkg/target"
 	"tkestack.io/kvass/pkg/utils/test"
 )
-
-const configTest = `
-global:
-  scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
-  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
-`
-
-func tempConfigFile(dir string) string {
-	file := path.Join(dir, "config")
-	if err := ioutil.WriteFile(file, []byte(configTest), 0755); err != nil {
-		panic(err)
-	}
-	return file
-}
-
-func tempTargetStore(r *shard.UpdateTargetsRequest, dir string, old bool) string {
-	var (
-		file = ""
-		data = []byte{}
-		err  error
-	)
-
-	if old {
-		file = "targets.json"
-		data, err = json.Marshal(r.Targets)
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		file = "kvass-shard.json"
-		data, err = json.Marshal(r)
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	if err := ioutil.WriteFile(path.Join(dir, file), data, 0755); err != nil {
-		panic(err)
-	}
-	return dir
-}
-
-func TestService_Init(t *testing.T) {
-	testServiceInit(t, true)
-	testServiceInit(t, false)
-}
-
-func testServiceInit(t *testing.T, old bool) {
-	r := require.New(t)
-	configLoad := false
-	targetsLoad := false
-	configFile := tempConfigFile(t.TempDir())
-	rq := &shard.UpdateTargetsRequest{
-		Targets: map[string][]*target.Target{
-			"job1": {{
-				Hash: 1,
-			}},
-		},
-	}
-
-	s := NewService("", configFile, tempTargetStore(rq, t.TempDir(), old),
-		[]func(*config.Config) error{
-			func(i *config.Config) error {
-				configLoad = true
-				return nil
-			},
-		},
-		[]func(map[string][]*target.Target) error{
-			func(targets map[string][]*target.Target) error {
-				targetsLoad = true
-				r.Equal(test.MustJSON(rq.Targets), test.MustJSON(targets))
-				return nil
-			},
-		},
-		nil, nil, logrus.New(),
-	)
-	r.NoError(s.Init())
-	r.True(configLoad)
-	r.True(targetsLoad)
-}
 
 func TestService_ServeHTTP(t *testing.T) {
 	var cases = []struct {
@@ -145,7 +62,9 @@ func TestService_ServeHTTP(t *testing.T) {
 			}))
 			defer tProm.Close()
 
-			a := NewService(tProm.URL, "", "", nil, nil, nil, nil, logrus.New())
+			a := NewService(tProm.URL, func() (info *prom.RuntimeInfo, e error) {
+				return nil, nil
+			}, prom.NewConfigManager("", logrus.New()), NewTargetsManager("", logrus.New()), logrus.New())
 			a.ginEngine.POST(a.path("/test"), func(context *gin.Context) {})
 
 			r := api.TestCall(t, a.ServeHTTP, cs.uri, http.MethodGet, "", nil)
@@ -154,101 +73,151 @@ func TestService_ServeHTTP(t *testing.T) {
 	}
 }
 
-func TestService_runtimeInfo(t *testing.T) {
-	var cases = []struct {
-		name           string
-		promRuntime    *prom.RuntimeInfo
-		targetStatus   map[uint64]*target.ScrapeStatus
-		wantHeadSeries int64
+func TestService_Run(t *testing.T) {
+	s := NewService("", nil, nil, nil, logrus.New())
+	r := require.New(t)
+	called := false
+	s.runHTTP = func(addr string, handler http.Handler) error {
+		r.Equal("123", addr)
+		called = true
+		return nil
+	}
+	r.NoError(s.Run("123"))
+	r.True(called)
+}
+
+func TestService_RuntimeInfo(t *testing.T) {
+	cases := []struct {
+		name               string
+		getPromRuntimeInfo func() (*prom.RuntimeInfo, error)
+		targets            *shard.UpdateTargetsRequest
+		configContent      string
+		wantAPIResult      *api.Result
 	}{
 		{
-			name:           "user prometheus runtime as head series info directly",
-			promRuntime:    &prom.RuntimeInfo{TimeSeriesCount: 100},
-			targetStatus:   map[uint64]*target.ScrapeStatus{},
-			wantHeadSeries: 100,
+			name: "prometheus head series return err",
+			getPromRuntimeInfo: func() (r *prom.RuntimeInfo, e error) {
+				return nil, fmt.Errorf("err")
+			},
+			targets:       &shard.UpdateTargetsRequest{},
+			configContent: "global:",
+			wantAPIResult: api.InternalErr(fmt.Errorf("err"), "get runtime from prometheus"),
 		},
 		{
-			name:        "forecast head series if target has not begun to be scraped",
-			promRuntime: &prom.RuntimeInfo{TimeSeriesCount: 0},
-			targetStatus: map[uint64]*target.ScrapeStatus{
-				1: {
-					Health: scrape.HealthUnknown,
-					Series: 100,
+			name: "prometheus head series < total series of all targets",
+			getPromRuntimeInfo: func() (info *prom.RuntimeInfo, e error) {
+				return &prom.RuntimeInfo{TimeSeriesCount: 1}, nil
+			},
+			targets: &shard.UpdateTargetsRequest{
+				Targets: map[string][]*target.Target{
+					"test": {
+						{
+							Hash:   1,
+							Series: 10,
+						},
+					},
 				},
 			},
-			wantHeadSeries: 100,
+			configContent: `global:
+  evaluation_interval: 10s
+  scrape_interval: 15s
+scrape_configs:
+- job_name: "test"
+  static_configs:
+  - targets:
+    - 127.0.0.1:9091`,
+			wantAPIResult: api.Data(&shard.RuntimeInfo{
+				HeadSeries:  10,
+				ConfigMD5:   "16df7021e4e47ab8f3052c1451487029",
+				IdleStartAt: nil,
+			}),
+		},
+		{
+			name: "prometheus head series > total series of all targets",
+			getPromRuntimeInfo: func() (info *prom.RuntimeInfo, e error) {
+				return &prom.RuntimeInfo{TimeSeriesCount: 100}, nil
+			},
+			targets: &shard.UpdateTargetsRequest{
+				Targets: map[string][]*target.Target{
+					"test": {
+						{
+							Hash:   1,
+							Series: 10,
+						},
+					},
+				},
+			},
+			configContent: `global:
+  evaluation_interval: 10s
+  scrape_interval: 15s
+scrape_configs:
+- job_name: "test"
+  static_configs:
+  - targets:
+    - 127.0.0.1:9091`,
+			wantAPIResult: api.Data(&shard.RuntimeInfo{
+				HeadSeries:  100,
+				ConfigMD5:   "16df7021e4e47ab8f3052c1451487029",
+				IdleStartAt: nil,
+			}),
 		},
 	}
-
 	for _, cs := range cases {
 		t.Run(cs.name, func(t *testing.T) {
-			a := NewService("", "", "", nil, nil,
-				func() (info *prom.RuntimeInfo, e error) {
-					return cs.promRuntime, nil
-				},
-				func() map[uint64]*target.ScrapeStatus {
-					return cs.targetStatus
-				},
-				logrus.New(),
-			)
-			a.lastReBalanceAt = time.Now()
+			r := require.New(t)
+			tm := NewTargetsManager(t.TempDir(), logrus.New())
+			r.NoError(tm.UpdateTargets(cs.targets))
 
-			res := &shard.RuntimeInfo{}
-			r := api.TestCall(t, a.ginEngine.ServeHTTP, "/api/v1/shard/runtimeinfo/", http.MethodGet, "", res)
-			r.Equal(cs.wantHeadSeries, res.HeadSeries)
+			cfg := path.Join(t.TempDir(), "config.yaml")
+			r.NoError(ioutil.WriteFile(cfg, []byte(cs.configContent), 0755))
+			cfgMa := prom.NewConfigManager(cfg, logrus.New())
+			r.NoError(cfgMa.Reload())
+
+			s := NewService("", cs.getPromRuntimeInfo, cfgMa, tm, logrus.New())
+			res := s.runtimeInfo(nil)
+			r.Equal(cs.wantAPIResult.Status, res.Status)
+			if res.Status != api.StatusError {
+				r.JSONEq(test.MustJSON(cs.wantAPIResult.Data), test.MustJSON(res.Data))
+			}
 		})
 	}
 }
 
-func TestService_getTargets(t *testing.T) {
-	want := map[uint64]*target.ScrapeStatus{
-		1: {
-			Health: scrape.HealthUnknown,
-			Series: 100,
-		},
-	}
-
-	a := NewService("", "", "", nil, nil, nil,
-		func() map[uint64]*target.ScrapeStatus {
-			return want
-		},
-		logrus.New(),
-	)
-
-	res := map[uint64]*target.ScrapeStatus{}
-	r := api.TestCall(t, a.ginEngine.ServeHTTP, "/api/v1/shard/targets/", http.MethodGet, "", &res)
-	r.JSONEq(test.MustJSON(want), test.MustJSON(res))
+func TestService_UpdateTargets(t *testing.T) {
+	data := `
+{
+  "Targets": {
+    "test": [
+      {
+        "Hash": 1,
+        "Series":1
+      }
+    ]
+  }
 }
+`
 
-func TestService_updateTargets(t *testing.T) {
-	tar := &shard.UpdateTargetsRequest{
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/shard/targets/", strings.NewReader(data))
+	w := httptest.NewRecorder()
 
+	r := require.New(t)
+	tm := NewTargetsManager(t.TempDir(), logrus.New())
+	s := NewService("", nil, nil, tm, logrus.New())
+	s.ServeHTTP(w, req)
+	result := w.Result()
+	r.Equal(200, result.StatusCode)
+	r.JSONEq(test.MustJSON(TargetsInfo{
 		Targets: map[string][]*target.Target{
-			"job1": {
+			"test": {
 				{
-					Series: 100,
 					Hash:   1,
+					Series: 1,
 				},
 			},
 		},
-	}
-
-	called := false
-	r := require.New(t)
-	a := NewService("", "", os.TempDir(), nil, []func(map[string][]*target.Target) error{
-		func(targets map[string][]*target.Target) error {
-			called = true
-			r.JSONEq(test.MustJSON(tar.Targets), test.MustJSON(targets))
-			return nil
+		IdleAt: nil,
+		Status: map[uint64]*target.ScrapeStatus{
+			1: target.NewScrapeStatus(1),
 		},
-	}, nil, nil, logrus.New())
-
-	api.TestCall(t, a.ginEngine.ServeHTTP, "/api/v1/shard/targets/", http.MethodPost, test.MustJSON(tar), nil)
-
-	r.True(called)
-	res := &shard.UpdateTargetsRequest{}
-	data, err := ioutil.ReadFile(a.storePath())
-	r.NoError(err)
-	r.NoError(json.Unmarshal(data, res))
-	r.JSONEq(test.MustJSON(tar), test.MustJSON(res))
+	}), test.MustJSON(tm.TargetsInfo()))
 }

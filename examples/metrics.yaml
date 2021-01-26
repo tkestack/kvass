@@ -6,8 +6,8 @@ metadata:
   name: metrics
 spec:
   progressDeadlineSeconds: 600
-  replicas: 6
-  revisionHistoryLimit: 10
+  replicas: 5
+  revisionHistoryLimit: 5
   selector:
     matchLabels:
       app.kubernetes.io/name: metrics
@@ -24,6 +24,8 @@ spec:
             - -label=4
             - -metrics=1
             - -value=10
+            - -value-len=20
+            - -label-len=20
           command:
             - /metrics
           image: tkestack/metrics-gen:latest

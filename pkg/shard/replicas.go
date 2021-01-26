@@ -35,9 +35,8 @@ type Replicas struct {
 	// APIPost is a function to do stand api request to target
 	// exposed this field for user to writ unit testing easily
 	APIPost func(url string, req interface{}, ret interface{}) (err error)
-	// scraping is a map that record the targets this Replicas scarping
-	// the key is target hash, scraping cache is invalid if it is nil
-	scraping map[uint64]bool
+	// scraping is the cached ScrapeStatus fetched from sidecar last time
+	scraping map[uint64]*target.ScrapeStatus
 	url      string
 	log      logrus.FieldLogger
 }
@@ -51,21 +50,6 @@ func NewReplicas(id string, url string, log logrus.FieldLogger) *Replicas {
 		url:     url,
 		log:     log,
 	}
-}
-
-func (r *Replicas) targetsScraping() (map[uint64]bool, error) {
-	if r.scraping == nil {
-		res, err := r.targetStatus()
-		if err != nil {
-			return nil, err
-		}
-		c := map[uint64]bool{}
-		for k := range res {
-			c[k] = true
-		}
-		r.scraping = c
-	}
-	return r.scraping, nil
 }
 
 func (r *Replicas) runtimeInfo() (*RuntimeInfo, error) {
@@ -87,35 +71,44 @@ func (r *Replicas) targetStatus() (map[uint64]*target.ScrapeStatus, error) {
 		return nil, fmt.Errorf("get targets status info from %s failed : %s", r.ID, err.Error())
 	}
 
+	//must copy
+	m := map[uint64]*target.ScrapeStatus{}
+	for k, v := range res {
+		newV := *v
+		m[k] = &newV
+	}
+
+	r.scraping = m
 	return res, nil
 }
 
+// updateTarget try apply targets to sidecar
+// request will be skipped if nothing changed according to r.scraping
 func (r *Replicas) updateTarget(request *UpdateTargetsRequest) error {
-	newCache := map[uint64]bool{}
+	newTargets := map[uint64]*target.Target{}
 	for _, ts := range request.Targets {
 		for _, t := range ts {
-			newCache[t.Hash] = true
+			newTargets[t.Hash] = t
 		}
 	}
 
-	if r.needUpdate(newCache) {
+	if r.needUpdate(newTargets) {
 		r.log.Infof("%s need update targets", r.ID)
 		if err := r.APIPost(r.url+"/api/v1/shard/targets/", &request, nil); err != nil {
 			return err
 		}
-		r.scraping = newCache
 	}
 
 	return nil
 }
 
-func (r *Replicas) needUpdate(cache map[uint64]bool) bool {
-	if len(cache) != len(r.scraping) {
+func (r *Replicas) needUpdate(targets map[uint64]*target.Target) bool {
+	if len(targets) != len(r.scraping) {
 		return true
 	}
 
-	for k, v := range cache {
-		if r.scraping[k] != v {
+	for k, v := range targets {
+		if r.scraping[k] == nil || r.scraping[k].TargetState != v.TargetState {
 			return true
 		}
 	}

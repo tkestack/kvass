@@ -15,22 +15,38 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package types
+package prom
 
 import (
-	"testing"
-
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	"io/ioutil"
+	"testing"
 )
 
-func TestFindString(t *testing.T) {
-	require.True(t, FindString("1", "1", "2"))
-	require.False(t, FindString("3", "1", "2"))
-}
+func TestConfigManager(t *testing.T) {
+	r := require.New(t)
+	file := t.TempDir() + "config.yaml"
+	data := `global:
+  evaluation_interval: 10s
+  scrape_interval: 15s
+scrape_configs:
+- job_name: "test"
+  static_configs:
+  - targets:
+    - 127.0.0.1:9091`
 
-func TestFindStringVague(t *testing.T) {
-	require.True(t, FindStringVague("1", "1", "2"))
-	require.True(t, FindStringVague("1", "11", "22"))
-	require.True(t, FindStringVague("/api/v1/shard/runtimeinfo", "/api/v1/shard/runtimeinfo/", "22"))
-	require.False(t, FindStringVague("3", "1", "2"))
+	r.NoError(ioutil.WriteFile(file, []byte(data), 0777))
+	m := NewConfigManager(file, logrus.New())
+	updated := false
+	m.AddReloadCallbacks(func(c *ConfigInfo) error {
+		updated = true
+		r.Equal(string(c.RawContent), data)
+		r.Equal("16df7021e4e47ab8f3052c1451487029", c.Md5)
+		r.Equal(1, len(c.Config.ScrapeConfigs))
+		return nil
+	})
+	r.NoError(m.Reload())
+	r.NotNil(m.ConfigInfo())
+	r.True(updated)
 }

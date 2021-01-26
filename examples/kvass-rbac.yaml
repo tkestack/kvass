@@ -3,6 +3,11 @@ kind: ClusterRole
 metadata:
   name: prometheus
 rules:
+  - apiGroups: [""]
+    resources:
+      - persistentvolumeclaims
+    verbs:
+      - delete
   - apiGroups:
       - apps
     resources:

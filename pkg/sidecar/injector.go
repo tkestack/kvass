@@ -25,6 +25,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/target"
 
 	"github.com/prometheus/prometheus/pkg/relabel"
@@ -57,23 +58,20 @@ type InjectConfigOptions struct {
 // Injector gen injected config file
 type Injector struct {
 	sync.Mutex
-	originFile string
 	outFile    string
 	option     InjectConfigOptions
 	curTargets map[string][]*target.Target
-	readFile   func(file string) ([]byte, error)
+	curCfg     *prom.ConfigInfo
 	writeFile  func(filename string, data []byte, perm os.FileMode) error
 	log        logrus.FieldLogger
 }
 
 // NewInjector create new injector with InjectConfigOptions
-func NewInjector(originFile, outFile string, option InjectConfigOptions, log logrus.FieldLogger) *Injector {
+func NewInjector(outFile string, option InjectConfigOptions, log logrus.FieldLogger) *Injector {
 	return &Injector{
-		originFile: originFile,
 		outFile:    outFile,
 		option:     option,
 		curTargets: map[string][]*target.Target{},
-		readFile:   ioutil.ReadFile,
 		writeFile:  ioutil.WriteFile,
 		log:        log,
 	}
@@ -82,21 +80,21 @@ func NewInjector(originFile, outFile string, option InjectConfigOptions, log log
 // UpdateTargets set new targets
 func (i *Injector) UpdateTargets(ts map[string][]*target.Target) error {
 	i.curTargets = ts
-	return i.UpdateConfig()
+	return i.inject()
 }
 
-// UpdateConfig gen new config
-func (i *Injector) UpdateConfig() error {
+// ApplyConfig gen new config
+func (i *Injector) ApplyConfig(cfg *prom.ConfigInfo) error {
+	i.curCfg = cfg
+	return i.inject()
+}
+
+func (i *Injector) inject() error {
 	i.Lock()
 	defer i.Unlock()
 
-	cfgData, err := i.readFile(i.originFile)
-	if err != nil {
-		return errors.Wrap(err, "read origin file failed")
-	}
-
 	cfg := &config.Config{}
-	if err := yaml.Unmarshal(cfgData, &cfg); err != nil {
+	if err := yaml.Unmarshal(i.curCfg.RawContent, &cfg); err != nil {
 		return err
 	}
 

@@ -6,6 +6,7 @@ require (
 	github.com/gin-contrib/pprof v1.3.0
 	github.com/gin-gonic/gin v1.6.3
 	github.com/go-kit/kit v0.10.0
+	github.com/gobuffalo/packr/v2 v2.2.0
 	github.com/golang/protobuf v1.4.2 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/common v0.14.0
