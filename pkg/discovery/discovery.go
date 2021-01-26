@@ -63,6 +63,7 @@ func New(log logrus.FieldLogger) *TargetsDiscovery {
 // WaitInit block until all job's sd done
 func (m *TargetsDiscovery) WaitInit(ctx context.Context) error {
 	t := time.NewTicker(time.Second)
+	flag := map[string]bool{}
 l1:
 	for {
 		select {
@@ -71,7 +72,10 @@ l1:
 				if _, exist := m.activeTargets[job]; !exist {
 					continue l1
 				}
-				m.log.Infof("job %s first service discovery done, active(%d) ,drop(%d)", job, len(m.activeTargets[job]), len(m.dropTargets[job]))
+				if !flag[job] {
+					m.log.Infof("job %s first service discovery done, active(%d) ,drop(%d)", job, len(m.activeTargets[job]), len(m.dropTargets[job]))
+					flag[job] = true
+				}
 			}
 			m.log.Infof("all job first service discovery done")
 			return nil
