@@ -79,9 +79,9 @@ func (s *ShardManager) Shards() ([]*shard.Group, error) {
 		return nil, err
 	}
 
-	podss := make([][]v1.Pod, len(stss.Items))
+	podss := make([]map[string]v1.Pod, len(stss.Items))
 	maxPods := 0
-	for _, sts := range stss.Items {
+	for i, sts := range stss.Items {
 		pods, err := s.getPods(sts.Spec.Template.Labels)
 		if err != nil {
 			return nil, errors.Wrap(err, "list pod")
@@ -90,28 +90,32 @@ func (s *ShardManager) Shards() ([]*shard.Group, error) {
 		if len(pods.Items) > maxPods {
 			maxPods = len(pods.Items)
 		}
-
-		podss = append(podss, pods.Items)
+		podss[i] = map[string]v1.Pod{}
+		for _, p := range pods.Items {
+			podss[i][p.Name] = p
+		}
 	}
 
 	ret := make([]*shard.Group, 0)
 	for i := 0; i < maxPods; i++ {
 		sg := shard.NewGroup(fmt.Sprintf("shard-%d", i), s.lg.WithField("shard", i))
-		for _, pods := range podss {
-			if i < len(pods) {
-				p := pods[i]
-				if !k8sutil.IsPodReady(&p) {
-					s.lg.Infof("pod %s is not ready", p.Name)
-					continue
-				}
-				url := fmt.Sprintf("http://%s:%d", p.Status.PodIP, s.port)
-				rp := s.replicateCache[url]
-				if rp == nil {
-					rp = shard.NewReplicas(p.Name, url, s.lg.WithField("replicate", p.Name))
-					s.replicateCache[url] = rp
-				}
-				sg.AddReplicas(rp)
+		for index, pods := range podss {
+			sts := stss.Items[index]
+			p := pods[fmt.Sprintf("%s-%d", sts.Name, i)]
+			if !k8sutil.IsPodReady(&p) {
+				s.lg.Infof("%s is not ready", p.Name)
+				continue
 			}
+
+			url := fmt.Sprintf("http://%s:%d", p.Status.PodIP, s.port)
+			hash := p.Name + "/" + url
+			rp := s.replicateCache[hash]
+			if rp == nil {
+				rp = shard.NewReplicas(p.Name, url, s.lg.WithField("replicate", p.Name))
+				s.replicateCache[hash] = rp
+			}
+
+			sg.AddReplicas(rp)
 		}
 		ret = append(ret, sg)
 	}
