@@ -97,7 +97,7 @@ spec:
           image: prom/prometheus:v2.19.2
           ports:
             - containerPort: 9090
-              name: web
+              name: server
               protocol: TCP
           volumeMounts:
             - mountPath: /etc/prometheus/config
