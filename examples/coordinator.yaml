@@ -57,7 +57,7 @@ spec:
           imagePullPolicy: Always
           args:
             - coordinator
-            - --shard.max-series=22000
+            - --shard.max-series=30000
             - --shard.selector=app.kubernetes.io/name=prometheus
             - --shard.namespace=$(NAMESPACE)
             - --config.file=/etc/prometheus/config_out/prometheus.env.yaml
