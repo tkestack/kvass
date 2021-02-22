@@ -20,6 +20,7 @@ package shard
 import (
 	"fmt"
 	"github.com/sirupsen/logrus"
+	"time"
 	"tkestack.io/kvass/pkg/api"
 	"tkestack.io/kvass/pkg/target"
 )
@@ -70,8 +71,17 @@ func (r *Replicas) targetsScraping() (map[uint64]bool, error) {
 
 func (r *Replicas) runtimeInfo() (*RuntimeInfo, error) {
 	res := &RuntimeInfo{}
+	maxRetry := 3
+	var err error = nil
 
-	err := r.APIGet(r.url+"/api/v1/shard/runtimeinfo/", &res)
+	// Retry 3 times
+	for i := 0; i < maxRetry; i++ {
+		err = r.APIGet(r.url+"/api/v1/shard/runtimeinfo/", &res)
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Millisecond * 500)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get runtime info from %s failed : %s", r.ID, err.Error())
 	}
@@ -82,7 +92,14 @@ func (r *Replicas) runtimeInfo() (*RuntimeInfo, error) {
 func (r *Replicas) targetStatus() (map[uint64]*target.ScrapeStatus, error) {
 	res := map[uint64]*target.ScrapeStatus{}
 
-	err := r.APIGet(r.url+"/api/v1/shard/targets/", &res)
+	maxRetry := 3
+	var err error = nil
+	for i := 0; i < maxRetry; i++ {
+		err = r.APIGet(r.url+"/api/v1/shard/targets/", &res)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get targets status info from %s failed : %s", r.ID, err.Error())
 	}
@@ -100,9 +117,18 @@ func (r *Replicas) updateTarget(request *UpdateTargetsRequest) error {
 
 	if r.needUpdate(newCache) {
 		r.log.Infof("%s need update targets", r.ID)
-		if err := r.APIPost(r.url+"/api/v1/shard/targets/", &request, nil); err != nil {
+		maxRetry := 3
+		var err error = nil
+		for i := 0; i < maxRetry; i++ {
+			err = r.APIPost(r.url+"/api/v1/shard/targets/", &request, nil)
+			if err == nil {
+				break
+			}
+		}
+		if err != nil {
 			return err
 		}
+
 		r.scraping = newCache
 	}
 
