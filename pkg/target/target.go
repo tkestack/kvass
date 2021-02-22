@@ -28,6 +28,11 @@ import (
 const (
 	// PrefixForInvalidLabelName is a prefix string for mark invalid label name become valid
 	PrefixForInvalidLabelName = model.ReservedLabelPrefix + "invalid_label_"
+
+	// StateNormal indicates this target is scraping normally
+	StateNormal = ""
+	// StateInTransfer indicate this target is in transfer process
+	StateInTransfer = "in_transfer"
 )
 
 // Target is a target generate prometheus config
@@ -39,6 +44,8 @@ type Target struct {
 	Labels labels.Labels `json:"labels"`
 	// Series is reference series of this target, may from target explorer
 	Series int64 `json:"series"`
+	// TargetState indicate current state of this target
+	TargetState string `json:"TargetState"`
 }
 
 // Address return the address from labels

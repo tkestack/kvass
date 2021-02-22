@@ -15,22 +15,15 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package types
+package encode
 
 import (
-	"testing"
-
 	"github.com/stretchr/testify/require"
+	"testing"
 )
 
-func TestFindString(t *testing.T) {
-	require.True(t, FindString("1", "1", "2"))
-	require.False(t, FindString("3", "1", "2"))
-}
-
-func TestFindStringVague(t *testing.T) {
-	require.True(t, FindStringVague("1", "1", "2"))
-	require.True(t, FindStringVague("1", "11", "22"))
-	require.True(t, FindStringVague("/api/v1/shard/runtimeinfo", "/api/v1/shard/runtimeinfo/", "22"))
-	require.False(t, FindStringVague("3", "1", "2"))
+func TestMd5(t *testing.T) {
+	data := `test`
+	md5 := Md5([]byte(data))
+	require.Equal(t, "098f6bcd4621d373cade4e832627b4f6", md5)
 }

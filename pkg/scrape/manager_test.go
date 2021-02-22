@@ -9,6 +9,7 @@ import (
 	"os"
 	"testing"
 	"time"
+	"tkestack.io/kvass/pkg/prom"
 )
 
 func TestManager(t *testing.T) {
@@ -22,7 +23,11 @@ func TestManager(t *testing.T) {
 	r.NoError(os.Setenv("SCRAPE_PROXY", "http://127.0.0.1:9090"))
 
 	ss := New()
-	r.NoError(ss.ApplyConfig(&config.Config{ScrapeConfigs: []*config.ScrapeConfig{cfg}}))
+	r.NoError(ss.ApplyConfig(&prom.ConfigInfo{
+		Config: &config.Config{
+			ScrapeConfigs: []*config.ScrapeConfig{cfg},
+		},
+	}))
 	s := ss.GetJob(cfg.JobName)
 	r.NotNil(s)
 

@@ -76,7 +76,7 @@ metrics0{code="201"} 2
 
 			u, _ := url.Parse("http://127.0.0.1:8080")
 			info := &JobInfo{
-				cli:      ts.Client(),
+				Cli:      ts.Client(),
 				Config:   &config.ScrapeConfig{JobName: "test"},
 				proxyURL: u,
 			}
@@ -95,7 +95,7 @@ metrics0{code="201"} 2
 `
 	r, err := relabel.NewRegexp("200")
 	require.NoError(t, err)
-	s, err := StatisticSample([]byte(data), "", []*relabel.Config{
+	s, err := StatisticSeries([]byte(data), "", []*relabel.Config{
 		{
 			SourceLabels: []model.LabelName{"code"},
 			Regex:        r,

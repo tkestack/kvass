@@ -22,6 +22,7 @@ import (
 	"github.com/prometheus/prometheus/config"
 	"sync"
 	"time"
+	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/target"
 
 	"github.com/prometheus/prometheus/discovery/targetgroup"
@@ -33,6 +34,8 @@ import (
 // every SDTargets contains a target use for shard sidecar to generate prometheus config
 // and a prometheus scrape target for api /api/v1/targets
 type SDTargets struct {
+	// Job if the jobName of this target
+	Job string
 	// ShardTarget is the target for shard sidecar to generate prometheus config
 	ShardTarget *target.Target
 	// PromTarget is the target of prometheus lib
@@ -63,6 +66,7 @@ func New(log logrus.FieldLogger) *TargetsDiscovery {
 // WaitInit block until all job's sd done
 func (m *TargetsDiscovery) WaitInit(ctx context.Context) error {
 	t := time.NewTicker(time.Second)
+	flag := map[string]bool{}
 l1:
 	for {
 		select {
@@ -71,7 +75,10 @@ l1:
 				if _, exist := m.activeTargets[job]; !exist {
 					continue l1
 				}
-				m.log.Infof("job %s first service discovery done, active(%d) ,drop(%d)", job, len(m.activeTargets[job]), len(m.dropTargets[job]))
+				if !flag[job] {
+					m.log.Infof("job %s first service discovery done, active(%d) ,drop(%d)", job, len(m.activeTargets[job]), len(m.dropTargets[job]))
+					flag[job] = true
+				}
 			}
 			m.log.Infof("all job first service discovery done")
 			return nil
@@ -98,6 +105,19 @@ func (m *TargetsDiscovery) ActiveTargets() map[string][]*SDTargets {
 	return ret
 }
 
+// ActiveTargetsByHash return a map that with the key of target hash
+func (m *TargetsDiscovery) ActiveTargetsByHash() map[uint64]*SDTargets {
+	m.targetsLock.Lock()
+	defer m.targetsLock.Unlock()
+	ret := map[uint64]*SDTargets{}
+	for _, ts := range m.activeTargets {
+		for _, t := range ts {
+			ret[t.ShardTarget.Hash] = t
+		}
+	}
+	return ret
+}
+
 // DropTargets return a copy map of global dropped targets the
 func (m *TargetsDiscovery) DropTargets() map[string][]*SDTargets {
 	m.targetsLock.Lock()
@@ -111,11 +131,11 @@ func (m *TargetsDiscovery) DropTargets() map[string][]*SDTargets {
 }
 
 // ApplyConfig save new scrape config
-func (m *TargetsDiscovery) ApplyConfig(cfg *config.Config) error {
+func (m *TargetsDiscovery) ApplyConfig(cfg *prom.ConfigInfo) error {
 	newActiveTargets := map[string][]*SDTargets{}
 	newDropTargets := map[string][]*SDTargets{}
 	newCfg := map[string]*config.ScrapeConfig{}
-	for _, j := range cfg.ScrapeConfigs {
+	for _, j := range cfg.Config.ScrapeConfigs {
 		newCfg[j.JobName] = j
 		if _, exist := m.activeTargets[j.JobName]; exist {
 			newActiveTargets[j.JobName] = m.activeTargets[j.JobName]

@@ -31,8 +31,10 @@ import (
 type Group struct {
 	// ID is the unique ID of this group
 	ID         string
-	log        logrus.FieldLogger
 	replicates []*Replicas
+	// scraping is the cached ScrapeStatus fetched last time
+	scraping map[uint64]*target.ScrapeStatus
+	log      logrus.FieldLogger
 }
 
 // NewGroup return a new shard with no replicate
@@ -41,6 +43,7 @@ func NewGroup(id string, lg logrus.FieldLogger) *Group {
 		ID:         id,
 		log:        lg,
 		replicates: []*Replicas{},
+		scraping:   map[uint64]*target.ScrapeStatus{},
 	}
 }
 
@@ -52,33 +55,6 @@ func (s *Group) AddReplicas(r *Replicas) {
 // Replicas return all replicates of this shard
 func (s *Group) Replicas() []*Replicas {
 	return s.replicates
-}
-
-// TargetsScraping return the targets hash that this Group scraping
-// the key of the map is target hash
-// the result is union set of all replicates
-func (s *Group) TargetsScraping() (map[uint64]bool, error) {
-	ret := map[uint64]bool{}
-	l := sync.Mutex{}
-	err := s.shardsDo(func(sd *Replicas) error {
-		res, err := sd.targetsScraping()
-		if err != nil {
-			return err
-		}
-
-		l.Lock()
-		defer l.Unlock()
-
-		for k := range res {
-			ret[k] = true
-		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return ret, nil
 }
 
 // RuntimeInfo return the runtime status of this Group
@@ -106,6 +82,7 @@ func (s *Group) RuntimeInfo() (*RuntimeInfo, error) {
 }
 
 // TargetStatus return the target runtime status that Group scraping
+// cached result will be send if something wrong
 func (s *Group) TargetStatus() (map[uint64]*target.ScrapeStatus, error) {
 	ret := map[uint64]*target.ScrapeStatus{}
 	l := sync.Mutex{}
@@ -123,14 +100,14 @@ func (s *Group) TargetStatus() (map[uint64]*target.ScrapeStatus, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return s.scraping, err
 	}
+	s.scraping = ret
 	return ret, nil
 }
 
 // UpdateTarget update the scraping targets of this Group
 // every Replicas will compare the new targets to it's targets scraping cache and decide if communicate with sidecar or not,
-// request will be send to sidecar only if new activeTargets not eq to the scraping
 func (s *Group) UpdateTarget(request *UpdateTargetsRequest) error {
 	return s.shardsDo(func(sd *Replicas) error {
 		return sd.updateTarget(request)

@@ -138,6 +138,7 @@ func targetsFromGroup(tg *targetgroup.Group, cfg *config.ScrapeConfig) ([]*SDTar
 		if lbls != nil || origLabels != nil {
 			tar := scrape.NewTarget(lbls, origLabels, cfg.Params)
 			targets = append(targets, &SDTargets{
+				Job:        cfg.JobName,
 				PromTarget: tar,
 				ShardTarget: &target.Target{
 					Hash:   targetHash(lbls, tar.URL().String()),

@@ -15,22 +15,16 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package types
+package encode
 
 import (
-	"testing"
-
-	"github.com/stretchr/testify/require"
+	"crypto/md5"
+	"github.com/gobuffalo/packr/v2/file/resolver/encoding/hex"
 )
 
-func TestFindString(t *testing.T) {
-	require.True(t, FindString("1", "1", "2"))
-	require.False(t, FindString("3", "1", "2"))
-}
-
-func TestFindStringVague(t *testing.T) {
-	require.True(t, FindStringVague("1", "1", "2"))
-	require.True(t, FindStringVague("1", "11", "22"))
-	require.True(t, FindStringVague("/api/v1/shard/runtimeinfo", "/api/v1/shard/runtimeinfo/", "22"))
-	require.False(t, FindStringVague("3", "1", "2"))
+// Md5 return the md5 code of bytes
+func Md5(b []byte) string {
+	h := md5.New()
+	h.Write(b)
+	return hex.EncodeToString(h.Sum(nil))
 }

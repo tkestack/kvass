@@ -18,6 +18,7 @@
 package coordinator
 
 import (
+	"fmt"
 	"github.com/prometheus/prometheus/scrape"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -27,32 +28,51 @@ import (
 	"tkestack.io/kvass/pkg/shard"
 	"tkestack.io/kvass/pkg/target"
 	"tkestack.io/kvass/pkg/utils/test"
+	"tkestack.io/kvass/pkg/utils/types"
 )
 
-type fakeShardsManager struct {
-	rtInfo       *shard.RuntimeInfo
-	targetStatus map[uint64]*target.ScrapeStatus
+type testingShard struct {
+	rtInfo        *shard.RuntimeInfo
+	targetStatus  map[uint64]*target.ScrapeStatus
+	resultTargets shard.UpdateTargetsRequest
+	wantTargets   shard.UpdateTargetsRequest
+}
 
-	resultRep           int32
-	resultUpdateTargets shard.UpdateTargetsRequest
+func (ts *testingShard) assert(t *testing.T) {
+	require.JSONEq(t, test.MustJSON(ts.wantTargets), test.MustJSON(ts.resultTargets))
+}
+
+type fakeShardsManager struct {
+	resultRep int32
+	wantRep   int32
+	shards    []*testingShard
 }
 
 // Shards return current Shards in the cluster
 func (f *fakeShardsManager) Shards() ([]*shard.Group, error) {
-	g := shard.NewGroup("shard-0", logrus.New())
-	rep := shard.NewReplicas("r0", "", logrus.New())
-	g.AddReplicas(rep)
-	rep.APIGet = func(url string, ret interface{}) error {
-		dm := map[string]interface{}{
-			"/api/v1/shard/targets/":     f.targetStatus,
-			"/api/v1/shard/runtimeinfo/": f.rtInfo,
+	ret := make([]*shard.Group, 0)
+	for i, s := range f.shards {
+		g := shard.NewGroup(fmt.Sprint(i), logrus.New())
+		rep := shard.NewReplicas(fmt.Sprint(i)+"-r0", "", logrus.New())
+		g.AddReplicas(rep)
+
+		temp := s
+		rep.APIGet = func(url string, ret interface{}) error {
+			dm := map[string]interface{}{
+				"/api/v1/shard/targets/":     temp.targetStatus,
+				"/api/v1/shard/runtimeinfo/": temp.rtInfo,
+			}
+			return test.CopyJSON(ret, dm[url])
 		}
-		return test.CopyJSON(ret, dm[url])
+
+		rep.APIPost = func(url string, req interface{}, ret interface{}) (err error) {
+			return test.CopyJSON(&temp.resultTargets, req)
+		}
+
+		ret = append(ret, g)
 	}
-	rep.APIPost = func(url string, req interface{}, ret interface{}) (err error) {
-		return test.CopyJSON(&f.resultUpdateTargets, req)
-	}
-	return []*shard.Group{g}, nil
+
+	return ret, nil
 }
 
 // ChangeScale create or delete Shards according to "expReplicate"
@@ -61,151 +81,529 @@ func (f *fakeShardsManager) ChangeScale(expReplicate int32) error {
 	return nil
 }
 
-func TestCoordinator_RunOnce(t *testing.T) {
-	job := "job1"
-	tar := &target.Target{
-		Hash:   1,
-		Series: 100,
-	}
-	active := &discovery.SDTargets{
-		ShardTarget: tar,
+func (f *fakeShardsManager) assert(t *testing.T) {
+	r := require.New(t)
+	r.Equal(f.wantRep, f.resultRep)
+
+	rs := f.shards
+	if f.resultRep < int32(len(f.shards)) {
+		rs = f.shards[:int(f.resultRep)]
 	}
 
+	for _, r := range rs {
+		r.assert(t)
+	}
+}
+
+func TestCoordinator_RunOnce(t *testing.T) {
 	var cases = []struct {
-		name              string
-		maxSeries         int64
-		maxShard          int32
-		exploreResult     *target.ScrapeStatus
-		shardManager      *fakeShardsManager
-		wantRep           int32
-		wantUpdateTargets map[string][]*target.Target
+		name             string
+		maxSeries        int64
+		maxShard         int32
+		maxIdleTime      time.Duration
+		period           time.Duration
+		getExploreResult func(hash uint64) *target.ScrapeStatus
+		getActive        func() map[uint64]*discovery.SDTargets
+		shardManager     *fakeShardsManager
 	}{
 		{
-			name:      "assign old target to shard already scrape it",
-			maxSeries: 200,
-			maxShard:  10,
+			name:      "delete not exist target",
+			maxSeries: 1000,
+			maxShard:  1000,
+			getActive: func() map[uint64]*discovery.SDTargets {
+				return map[uint64]*discovery.SDTargets{}
+			},
 			shardManager: &fakeShardsManager{
-				rtInfo: &shard.RuntimeInfo{
-					HeadSeries: 100,
+				wantRep: 1,
+				shards: []*testingShard{
+					{
+						rtInfo: &shard.RuntimeInfo{
+							HeadSeries: 1,
+						},
+						targetStatus: map[uint64]*target.ScrapeStatus{
+							1: {},
+						},
+						wantTargets: shard.UpdateTargetsRequest{Targets: map[string][]*target.Target{}},
+					},
 				},
-				// already scraping target
-				targetStatus: map[uint64]*target.ScrapeStatus{
-					1: {Health: scrape.HealthGood},
-				},
-			},
-			wantRep:           1,
-			wantUpdateTargets: nil, // scraping target is not changed
-		},
-		{
-			name:      "assign new target to shard success",
-			maxSeries: 200,
-			maxShard:  10,
-			shardManager: &fakeShardsManager{
-				rtInfo: &shard.RuntimeInfo{
-					HeadSeries: 0, // has enough space
-				},
-				// no scraping targets
-				targetStatus: map[uint64]*target.ScrapeStatus{},
-			},
-			exploreResult: &target.ScrapeStatus{
-				Series: 100,
-				Health: scrape.HealthGood,
-			},
-			wantRep: 1,
-			wantUpdateTargets: map[string][]*target.Target{
-				job: {tar},
 			},
 		},
 		{
-			name:      "new target not explored",
-			maxSeries: 200,
-			maxShard:  10,
-			shardManager: &fakeShardsManager{
-				rtInfo: &shard.RuntimeInfo{
-					HeadSeries: 0, // has enough space
-				},
-				// no scraping targets
-				targetStatus: map[uint64]*target.ScrapeStatus{},
+			name:      "assign new target normally",
+			maxSeries: 1000,
+			maxShard:  1000,
+			getActive: func() map[uint64]*discovery.SDTargets {
+				return map[uint64]*discovery.SDTargets{
+					1: {
+						Job: "test",
+						ShardTarget: &target.Target{
+							Hash: 1,
+						},
+					},
+				}
 			},
-			wantRep: 1,
+			getExploreResult: func(hash uint64) *target.ScrapeStatus {
+				return &target.ScrapeStatus{Series: 10, Health: scrape.HealthGood}
+			},
+			shardManager: &fakeShardsManager{
+				wantRep: 1,
+				shards: []*testingShard{
+					{
+						rtInfo: &shard.RuntimeInfo{
+							HeadSeries: 1,
+						},
+						wantTargets: shard.UpdateTargetsRequest{
+							Targets: map[string][]*target.Target{
+								"test": {
+									{
+										Hash:        1,
+										Series:      10,
+										TargetState: target.StateNormal,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		{
-			name:      "need scale up, and scale up success",
-			maxSeries: 200,
-			maxShard:  10,
+			name:      "assign new target, shard not changeable, don't scale up",
+			maxSeries: 1000,
+			maxShard:  1000,
+			getActive: func() map[uint64]*discovery.SDTargets {
+				return map[uint64]*discovery.SDTargets{
+					1: {
+						Job: "test",
+						ShardTarget: &target.Target{
+							Hash: 1,
+						},
+					},
+				}
+			},
+			getExploreResult: func(hash uint64) *target.ScrapeStatus {
+				return &target.ScrapeStatus{Series: 10, Health: scrape.HealthGood}
+			},
 			shardManager: &fakeShardsManager{
-				rtInfo: &shard.RuntimeInfo{
-					HeadSeries: 120, // has no enough space
+				wantRep: 1,
+				shards: []*testingShard{
+					{
+						rtInfo: &shard.RuntimeInfo{
+							HeadSeries: 1,
+							ConfigMD5:  "invalid",
+						},
+						wantTargets: shard.UpdateTargetsRequest{
+							// shard not changeable , don't assign
+						},
+					},
 				},
-				// no scraping targets
-				targetStatus: map[uint64]*target.ScrapeStatus{},
 			},
-			exploreResult: &target.ScrapeStatus{
-				Series: 100,
-				Health: scrape.HealthGood,
-			},
-			wantRep:           2,
-			wantUpdateTargets: nil,
 		},
 		{
-			name:      "need scale up, but max shard limited",
-			maxSeries: 200,
-			maxShard:  1,
+			name:      "assign new target, need scale up, but max shard limit ",
+			maxSeries: 1000,
+			maxShard:  0,
+			getActive: func() map[uint64]*discovery.SDTargets {
+				return map[uint64]*discovery.SDTargets{
+					1: {
+						Job: "test",
+						ShardTarget: &target.Target{
+							Hash: 1,
+						},
+					},
+				}
+			},
+			getExploreResult: func(hash uint64) *target.ScrapeStatus {
+				return &target.ScrapeStatus{Series: 10, Health: scrape.HealthGood}
+			},
 			shardManager: &fakeShardsManager{
-				rtInfo: &shard.RuntimeInfo{
-					HeadSeries: 120, // has no enough space
-				},
-				// no scraping targets
-				targetStatus: map[uint64]*target.ScrapeStatus{},
+				wantRep: 0,
 			},
-			exploreResult: &target.ScrapeStatus{
-				Series: 100,
-				Health: scrape.HealthGood,
-			},
-			wantRep:           1,
-			wantUpdateTargets: nil,
 		},
 		{
-			name:      "delete target from shard if target not exist",
-			maxSeries: 100,
-			maxShard:  1,
+			name:      "assign new target, need scale up",
+			maxSeries: 1000,
+			maxShard:  1000,
+			getActive: func() map[uint64]*discovery.SDTargets {
+				return map[uint64]*discovery.SDTargets{
+					1: {
+						Job: "test",
+						ShardTarget: &target.Target{
+							Hash: 1,
+						},
+					},
+				}
+			},
+			getExploreResult: func(hash uint64) *target.ScrapeStatus {
+				return &target.ScrapeStatus{Series: 10, Health: scrape.HealthGood}
+			},
 			shardManager: &fakeShardsManager{
-				rtInfo: &shard.RuntimeInfo{
-					HeadSeries: 100, // has no enough space
-				},
-				// no scraping targets
-				targetStatus: map[uint64]*target.ScrapeStatus{
-					1: {Health: scrape.HealthGood},
-					2: {Health: scrape.HealthGood},
+				wantRep: 1,
+			},
+		},
+		{
+			name:      "shard overload, no space, need scale up",
+			maxSeries: 1000,
+			maxShard:  1000,
+			getActive: func() map[uint64]*discovery.SDTargets {
+				return map[uint64]*discovery.SDTargets{
+					1: {
+						Job: "test",
+						ShardTarget: &target.Target{
+							Hash: 1,
+						},
+					},
+				}
+			},
+			shardManager: &fakeShardsManager{
+				wantRep: 2,
+				shards: []*testingShard{
+					{
+						rtInfo: &shard.RuntimeInfo{
+							HeadSeries: 2000,
+						},
+						targetStatus: map[uint64]*target.ScrapeStatus{
+							1: {
+								Series: 100,
+							},
+						},
+						wantTargets: shard.UpdateTargetsRequest{
+							// targets no change
+						},
+					},
 				},
 			},
-			wantRep: 1,
-			wantUpdateTargets: map[string][]*target.Target{
-				job: {tar},
+		},
+		{
+			name:      "shard overload, transfer begin",
+			maxSeries: 1000,
+			maxShard:  1000,
+			getActive: func() map[uint64]*discovery.SDTargets {
+				return map[uint64]*discovery.SDTargets{
+					1: {
+						Job: "test",
+						ShardTarget: &target.Target{
+							Hash: 1,
+						},
+					},
+				}
+			},
+			shardManager: &fakeShardsManager{
+				wantRep: 2,
+				shards: []*testingShard{
+					{
+						rtInfo: &shard.RuntimeInfo{
+							HeadSeries: 2000,
+						},
+						targetStatus: map[uint64]*target.ScrapeStatus{
+							1: {
+								Series:      100,
+								Health:      scrape.HealthGood,
+								ScrapeTimes: minWaitScrapeTimes,
+							},
+						},
+						wantTargets: shard.UpdateTargetsRequest{
+							Targets: map[string][]*target.Target{
+								"test": {
+									{
+										Hash:        1,
+										Series:      100,
+										TargetState: target.StateInTransfer,
+									},
+								},
+							},
+						},
+					},
+					{
+						rtInfo: &shard.RuntimeInfo{
+							HeadSeries: 10,
+						},
+						targetStatus: map[uint64]*target.ScrapeStatus{},
+						wantTargets: shard.UpdateTargetsRequest{
+							Targets: map[string][]*target.Target{
+								"test": {
+									{
+										Hash:        1,
+										Series:      100,
+										TargetState: target.StateNormal,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:      "shard overload, transfer end",
+			maxSeries: 1000,
+			maxShard:  1000,
+			getActive: func() map[uint64]*discovery.SDTargets {
+				return map[uint64]*discovery.SDTargets{
+					1: {
+						Job: "test",
+						ShardTarget: &target.Target{
+							Hash: 1,
+						},
+					},
+				}
+			},
+			shardManager: &fakeShardsManager{
+				wantRep: 2,
+				shards: []*testingShard{
+					{
+						rtInfo: &shard.RuntimeInfo{
+							HeadSeries: 2000,
+						},
+						targetStatus: map[uint64]*target.ScrapeStatus{
+							1: {
+								Series:      100,
+								Health:      scrape.HealthGood,
+								ScrapeTimes: minWaitScrapeTimes,
+								TargetState: target.StateInTransfer,
+							},
+						},
+						wantTargets: shard.UpdateTargetsRequest{
+							Targets: map[string][]*target.Target{}, // delete target
+						},
+					},
+					{
+						rtInfo: &shard.RuntimeInfo{
+							HeadSeries: 10,
+						},
+						targetStatus: map[uint64]*target.ScrapeStatus{
+							1: {
+								Series:      100,
+								Health:      scrape.HealthGood,
+								ScrapeTimes: minWaitScrapeTimes,
+								TargetState: target.StateNormal,
+							},
+						},
+						wantTargets: shard.UpdateTargetsRequest{
+							// nothing changed
+						},
+					},
+				},
+			},
+		},
+		{
+			name:        "shard can be removed, transfer begin",
+			maxSeries:   1000,
+			maxShard:    1000,
+			maxIdleTime: time.Second,
+			getActive: func() map[uint64]*discovery.SDTargets {
+				return map[uint64]*discovery.SDTargets{
+					1: {
+						Job: "test",
+						ShardTarget: &target.Target{
+							Hash: 1,
+						},
+					},
+				}
+			},
+			shardManager: &fakeShardsManager{
+				wantRep: 2,
+				shards: []*testingShard{
+					{
+						rtInfo: &shard.RuntimeInfo{
+							HeadSeries: 10,
+						},
+						targetStatus: map[uint64]*target.ScrapeStatus{},
+						wantTargets: shard.UpdateTargetsRequest{
+							Targets: map[string][]*target.Target{
+								"test": {
+									{
+										Hash:        1,
+										Series:      100,
+										TargetState: target.StateNormal,
+									},
+								},
+							},
+						},
+					},
+					{
+						rtInfo: &shard.RuntimeInfo{
+							HeadSeries: 100,
+						},
+						targetStatus: map[uint64]*target.ScrapeStatus{
+							1: {
+								Series:      100,
+								Health:      scrape.HealthGood,
+								ScrapeTimes: minWaitScrapeTimes,
+								TargetState: target.StateNormal,
+							},
+						},
+						wantTargets: shard.UpdateTargetsRequest{
+							Targets: map[string][]*target.Target{
+								"test": {
+									{
+										Hash:        1,
+										Series:      100,
+										TargetState: target.StateInTransfer,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:        "shard can be removed, transfer end, begin idle",
+			maxSeries:   1000,
+			maxShard:    1000,
+			maxIdleTime: time.Second,
+			getActive: func() map[uint64]*discovery.SDTargets {
+				return map[uint64]*discovery.SDTargets{
+					1: {
+						Job: "test",
+						ShardTarget: &target.Target{
+							Hash: 1,
+						},
+					},
+				}
+			},
+			shardManager: &fakeShardsManager{
+				wantRep: 2,
+				shards: []*testingShard{
+					{
+						rtInfo: &shard.RuntimeInfo{
+							HeadSeries: 10,
+						},
+						targetStatus: map[uint64]*target.ScrapeStatus{
+							1: {
+								Series:      100,
+								Health:      scrape.HealthGood,
+								ScrapeTimes: minWaitScrapeTimes,
+								TargetState: target.StateNormal,
+							},
+						},
+						wantTargets: shard.UpdateTargetsRequest{
+							// nothing changed
+						},
+					},
+					{
+						rtInfo: &shard.RuntimeInfo{
+							HeadSeries: 100,
+						},
+						targetStatus: map[uint64]*target.ScrapeStatus{
+							1: {
+								Series:      100,
+								Health:      scrape.HealthGood,
+								ScrapeTimes: minWaitScrapeTimes,
+								TargetState: target.StateInTransfer,
+							},
+						},
+						wantTargets: shard.UpdateTargetsRequest{
+							Targets: map[string][]*target.Target{}, // target deleted
+						},
+					},
+				},
+			},
+		},
+		{
+			name:        "shard can be removed, transfer end, shard removed",
+			maxSeries:   1000,
+			maxShard:    1000,
+			maxIdleTime: time.Second,
+			getActive: func() map[uint64]*discovery.SDTargets {
+				return map[uint64]*discovery.SDTargets{
+					1: {
+						Job: "test",
+						ShardTarget: &target.Target{
+							Hash: 1,
+						},
+					},
+				}
+			},
+			shardManager: &fakeShardsManager{
+				wantRep: 1, // must scale down
+				shards: []*testingShard{
+					{
+						rtInfo: &shard.RuntimeInfo{
+							HeadSeries: 10,
+						},
+						targetStatus: map[uint64]*target.ScrapeStatus{
+							1: {
+								Series:      100,
+								Health:      scrape.HealthGood,
+								ScrapeTimes: minWaitScrapeTimes,
+								TargetState: target.StateNormal,
+							},
+						},
+						wantTargets: shard.UpdateTargetsRequest{
+							// nothing changed
+						},
+					},
+					{
+						rtInfo: &shard.RuntimeInfo{
+							HeadSeries:  100,
+							IdleStartAt: types.TimePtr(time.Now().Add(-time.Second * 3)),
+						},
+						targetStatus: map[uint64]*target.ScrapeStatus{},
+						wantTargets:  shard.UpdateTargetsRequest{},
+					},
+				},
 			},
 		},
 	}
 
 	for _, cs := range cases {
 		t.Run(cs.name, func(t *testing.T) {
-			r := require.New(t)
-			c := NewCoordinator(
-				cs.shardManager,
-				cs.maxSeries,
-				cs.maxShard, time.Second,
-				func(job string, hash uint64) *target.ScrapeStatus {
-					return cs.exploreResult
-				},
-				func() map[string][]*discovery.SDTargets {
-					return map[string][]*discovery.SDTargets{
-						job: {active},
-					}
-				},
-				logrus.New(),
-			)
-			r.NoError(c.RunOnce())
-			r.Equal(cs.wantRep, cs.shardManager.resultRep)
-			r.Equal(test.MustJSON(cs.wantUpdateTargets), test.MustJSON(cs.shardManager.resultUpdateTargets.Targets))
+			c := NewCoordinator(cs.shardManager, cs.maxSeries, cs.maxShard, cs.maxIdleTime, cs.period, func() string {
+				return ""
+			}, cs.getExploreResult, cs.getActive, logrus.New())
+			require.NoError(t, c.runOnce())
+			cs.shardManager.assert(t)
 		})
 	}
+}
+
+func TestCoordinator_LastGlobalScrapeStatus(t *testing.T) {
+	getStatus := func(hash uint64) *target.ScrapeStatus {
+		return &target.ScrapeStatus{Series: 1, Health: scrape.HealthGood}
+	}
+
+	shardManager := &fakeShardsManager{
+		shards: []*testingShard{
+			{
+				rtInfo: &shard.RuntimeInfo{
+					HeadSeries: 100,
+				},
+				targetStatus: map[uint64]*target.ScrapeStatus{
+					2: {
+						Series: 100,
+						Health: scrape.HealthBad,
+					},
+				},
+			},
+		},
+	}
+
+	active := func() map[uint64]*discovery.SDTargets {
+		return map[uint64]*discovery.SDTargets{
+			1: {
+				Job: "test",
+				ShardTarget: &target.Target{
+					Hash: 1,
+				},
+			},
+			2: {
+				Job: "test",
+				ShardTarget: &target.Target{
+					Hash: 2,
+				},
+			},
+		}
+	}
+
+	c := NewCoordinator(shardManager, 100, 100, 0, time.Second, func() string {
+		return ""
+	}, getStatus, active, logrus.New())
+
+	r := require.New(t)
+	r.NoError(c.runOnce())
+	g := c.LastGlobalScrapeStatus()
+	r.NotNil(g[1])
+	r.NotNil(g[2])
 }

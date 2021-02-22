@@ -28,17 +28,18 @@ import (
 	"testing"
 	"tkestack.io/kvass/pkg/api"
 	"tkestack.io/kvass/pkg/discovery"
+	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/target"
 )
 
 func TestAPI_Targets(t *testing.T) {
-	getScrapeStatus := func(targets map[string][]*discovery.SDTargets) (statuses map[uint64]*target.ScrapeStatus, e error) {
+	getScrapeStatus := func() map[uint64]*target.ScrapeStatus {
 		return map[uint64]*target.ScrapeStatus{
 			1: {
 				Health:    scrape.HealthBad,
 				LastError: "test",
 			},
-		}, nil
+		}
 	}
 
 	lbs := labels.Labels{
@@ -76,7 +77,7 @@ func TestAPI_Targets(t *testing.T) {
 		}
 	}
 
-	a := NewService("", nil, getScrapeStatus, getActive, getDrop, logrus.New())
+	a := NewService(prom.NewConfigManager("", logrus.New()), getScrapeStatus, getActive, getDrop, logrus.New())
 	res := &v1.TargetDiscovery{}
 	r := api.TestCall(t, a.Engine.ServeHTTP, "/api/v1/targets", http.MethodGet, "", res)
 	r.Equal("http://127.0.0.1:80", res.ActiveTargets[0].ScrapeURL)

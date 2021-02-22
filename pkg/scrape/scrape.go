@@ -48,16 +48,16 @@ var userAgentHeader = fmt.Sprintf("prometheusURL/%s", version.Version)
 type JobInfo struct {
 	// Config is the origin scrape config in config file
 	Config *config.ScrapeConfig
-	// cli is the http.cli for scraping
+	// Cli is the http.Cli for scraping
 	// all scraping request will be proxy to env SCRAPE_PROXY if it is not empty
-	cli *http.Client
+	Cli *http.Client
 	// proxyURL save old proxyURL set in ScrapeConfig if env SCRAPE_PROXY is not empty
 	// proxyURL will be saved in head "Origin-Proxy" when scrape request is send
 	proxyURL *url.URL
 	timeout  time.Duration
 }
 
-func newJobInfo(cfg *config.ScrapeConfig) (*JobInfo, error) {
+func newJobInfo(cfg config.ScrapeConfig) (*JobInfo, error) {
 	proxy := os.Getenv("SCRAPE_PROXY")
 	oldProxy := cfg.HTTPClientConfig.ProxyURL
 	if proxy != "" {
@@ -70,12 +70,12 @@ func newJobInfo(cfg *config.ScrapeConfig) (*JobInfo, error) {
 
 	client, err := config_util.NewClientFromConfig(cfg.HTTPClientConfig, cfg.JobName, true, false)
 	if err != nil {
-		return nil, errors.Wrap(err, "error creating HTTP cli")
+		return nil, errors.Wrap(err, "error creating HTTP Cli")
 	}
 
 	return &JobInfo{
-		cli:      client,
-		Config:   cfg,
+		Cli:      client,
+		Config:   &cfg,
 		proxyURL: oldProxy.URL,
 		timeout:  time.Duration(cfg.ScrapeTimeout),
 	}, nil
@@ -92,12 +92,12 @@ func (j *JobInfo) Scrape(url string) ([]byte, string, error) {
 	req.Header.Add("Accept", acceptHeader)
 	req.Header.Add("Accept-Encoding", "gzip")
 	req.Header.Set("User-Agent", userAgentHeader)
-	req.Header.Set("X-prometheusURL-cli-Timeout-Seconds", fmt.Sprintf("%f", j.timeout.Seconds()))
+	req.Header.Set("X-prometheusURL-Cli-Timeout-Seconds", fmt.Sprintf("%f", j.timeout.Seconds()))
 	if j.proxyURL != nil {
 		req.Header.Set("Origin-Proxy", j.proxyURL.String())
 	}
 
-	resp, err := j.cli.Do(req)
+	resp, err := j.Cli.Do(req)
 	if err != nil {
 		return nil, "", err
 	}
@@ -131,8 +131,8 @@ func (j *JobInfo) Scrape(url string) ([]byte, string, error) {
 	return buf.Bytes(), resp.Header.Get("Content-Type"), nil
 }
 
-// StatisticSample statistic samples from metrics raw data
-func StatisticSample(b []byte, contentType string, rc []*relabel.Config) (total int64, err error) {
+// StatisticSeries statistic load from metrics raw data
+func StatisticSeries(b []byte, contentType string, rc []*relabel.Config) (total int64, err error) {
 	var (
 		p  = textparse.New(b, contentType)
 		et textparse.Entry
@@ -149,7 +149,7 @@ func StatisticSample(b []byte, contentType string, rc []*relabel.Config) (total 
 		case textparse.EntrySeries:
 			var lset labels.Labels
 			_ = p.Metric(&lset)
-			if relabel.Process(lset, rc...) != nil {
+			if newSets := relabel.Process(lset, rc...); newSets != nil {
 				total++
 			}
 		}

@@ -18,13 +18,10 @@
 package coordinator
 
 import (
-	"fmt"
-	"github.com/pkg/errors"
 	"sort"
 
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
-	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/scrape"
 	v1 "github.com/prometheus/prometheus/web/api/v1"
 	"github.com/sirupsen/logrus"
@@ -39,28 +36,24 @@ import (
 type Service struct {
 	// gin.Engine is the gin engine for handle http request
 	*gin.Engine
-	lg          logrus.FieldLogger
-	configFile  string
-	configApply []func(cfg *config.Config) error
-
-	getScrapeStatus  func(map[string][]*discovery.SDTargets) (map[uint64]*target.ScrapeStatus, error)
+	lg               logrus.FieldLogger
+	cfgManager       *prom.ConfigManager
+	getScrapeStatus  func() map[uint64]*target.ScrapeStatus
 	getActiveTargets func() map[string][]*discovery.SDTargets
 	getDropTargets   func() map[string][]*discovery.SDTargets
 }
 
 // NewService return a new web server
 func NewService(
-	configFile string,
-	configApply []func(cfg *config.Config) error,
-	getScrapeStatus func(map[string][]*discovery.SDTargets) (map[uint64]*target.ScrapeStatus, error),
+	cfgManager *prom.ConfigManager,
+	getScrapeStatus func() map[uint64]*target.ScrapeStatus,
 	getActiveTargets func() map[string][]*discovery.SDTargets,
 	getDropTargets func() map[string][]*discovery.SDTargets,
 	lg logrus.FieldLogger) *Service {
 	w := &Service{
 		Engine:           gin.Default(),
 		lg:               lg,
-		configFile:       configFile,
-		configApply:      configApply,
+		cfgManager:       cfgManager,
 		getScrapeStatus:  getScrapeStatus,
 		getActiveTargets: getActiveTargets,
 		getDropTargets:   getDropTargets,
@@ -69,20 +62,15 @@ func NewService(
 
 	w.GET("/api/v1/targets", api.Wrap(lg, w.targets))
 	w.POST("/-/reload", api.Wrap(lg, func(ctx *gin.Context) *api.Result {
-		return prom.APIReloadConfig(lg, configFile, configApply)
+		if err := w.cfgManager.Reload(); err != nil {
+			return api.BadDataErr(err, "reload failed")
+		}
+		return api.Data(nil)
 	}))
 	w.GET("/api/v1/status/config", api.Wrap(lg, func(ctx *gin.Context) *api.Result {
-		return prom.APIReadConfig(configFile)
+		return api.Data(gin.H{"yaml": string(cfgManager.ConfigInfo().RawContent)})
 	}))
 	return w
-}
-
-// Init init config
-func (s *Service) Init() error {
-	if err := prom.APIReloadConfig(s.lg, s.configFile, s.configApply).Err; err != "" {
-		return errors.Wrapf(fmt.Errorf(err), "init config file failed")
-	}
-	return nil
 }
 
 // targets compatible of prometheus Service /api/v1/targets
@@ -119,10 +107,7 @@ func (s *Service) targets(ctx *gin.Context) *api.Result {
 		activeTargets := s.getActiveTargets()
 		activeKeys, numTargets := sortKeys(activeTargets)
 		res.ActiveTargets = make([]*v1.Target, 0, numTargets)
-		status, err := s.getScrapeStatus(activeTargets)
-		if err != nil {
-			return api.InternalErr(err, "get targets runtime")
-		}
+		status := s.getScrapeStatus()
 
 		for _, key := range activeKeys {
 			for _, t := range activeTargets[key] {

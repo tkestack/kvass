@@ -41,21 +41,6 @@ func TestGroup_Replicas(t *testing.T) {
 	r.Equal(1, len(s.Replicas()))
 }
 
-func TestShard_TargetsScraping(t *testing.T) {
-	s, rep, r := newTestingGroup(t)
-	rep.APIGet = func(url string, ret interface{}) error {
-		return test.CopyJSON(ret, map[uint64]*target.ScrapeStatus{
-			1: {
-				LastError: "test",
-			},
-		})
-	}
-
-	ret, err := s.TargetsScraping()
-	r.NoError(err)
-	r.NotNil(ret)
-}
-
 func TestGroup_RuntimeInfo(t *testing.T) {
 	s, rep, r := newTestingGroup(t)
 	rep.APIGet = func(url string, ret interface{}) error {
@@ -92,13 +77,13 @@ func TestGroup_TargetStatus(t *testing.T) {
 func TestGroup_UpdateTarget(t *testing.T) {
 	var cases = []struct {
 		name        string
-		curScraping map[uint64]bool
+		curScraping map[uint64]*target.ScrapeStatus
 		wantTargets *UpdateTargetsRequest
 		wantUpdate  bool
 	}{
 		{
-			name:        "need update",
-			curScraping: map[uint64]bool{},
+			name:        "need update, targets not exist",
+			curScraping: map[uint64]*target.ScrapeStatus{},
 			wantTargets: &UpdateTargetsRequest{
 				Targets: map[string][]*target.Target{
 					"job1": {
@@ -111,8 +96,27 @@ func TestGroup_UpdateTarget(t *testing.T) {
 			wantUpdate: true,
 		},
 		{
-			name:        "not need update",
-			curScraping: map[uint64]bool{1: true},
+			name: "need update, target state change",
+			curScraping: map[uint64]*target.ScrapeStatus{
+				1: {},
+			},
+			wantTargets: &UpdateTargetsRequest{
+				Targets: map[string][]*target.Target{
+					"job1": {
+						{
+							Hash:        1,
+							TargetState: target.StateInTransfer,
+						},
+					},
+				},
+			},
+			wantUpdate: true,
+		},
+		{
+			name: "not need update",
+			curScraping: map[uint64]*target.ScrapeStatus{
+				1: {},
+			},
 			wantTargets: &UpdateTargetsRequest{
 				Targets: map[string][]*target.Target{
 					"job1": {

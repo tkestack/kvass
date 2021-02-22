@@ -42,9 +42,9 @@ func TestScrapeStatus_SetScrapeErr(t *testing.T) {
 func TestScrapeStatus_UpdateSamples(t *testing.T) {
 	r := require.New(t)
 	st := NewScrapeStatus(1)
-	st.UpdateSamples(2)
-	st.UpdateSamples(2)
-	st.UpdateSamples(2)
-	st.UpdateSamples(2)
+	st.UpdateSeries(2)
+	st.UpdateSeries(2)
+	st.UpdateSeries(2)
+	st.UpdateSeries(2)
 	r.Equal(int64(2), st.Series)
 }

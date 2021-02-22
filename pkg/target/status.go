@@ -32,9 +32,13 @@ type ScrapeStatus struct {
 	LastScrapeDuration float64 `json:"lastScrapeDuration"`
 	// Health it the status of last scraping
 	Health scrape.TargetHealth `json:"health"`
-	// Series is the avg sample of last 3 times scraping, metrics_relabel_configs will be process
-	Series     int64 `json:"series"`
-	lastSeries []int64
+	// Series is the avg load of last 3 times scraping, metrics_relabel_configs will be process
+	Series int64 `json:"series"`
+	// TargetState indicate current state of this target
+	TargetState string `json:"TargetState"`
+	// ScrapeTimes is the times target scraped by this shard
+	ScrapeTimes uint64 `json:"ScrapeTimes"`
+	lastSeries  []int64
 }
 
 // SetScrapeErr mark the result of this scraping
@@ -52,7 +56,7 @@ func (t *ScrapeStatus) SetScrapeErr(start time.Time, err error) {
 	}
 }
 
-// NewScrapeStatus create a new ScrapeStatus with referential Series
+// NewScrapeStatus create a new ScrapeStatus with referential series
 func NewScrapeStatus(series int64) *ScrapeStatus {
 	return &ScrapeStatus{
 		Series: series,
@@ -60,14 +64,14 @@ func NewScrapeStatus(series int64) *ScrapeStatus {
 	}
 }
 
-// UpdateSamples statistic target samples info
-func (t *ScrapeStatus) UpdateSamples(s int64) {
+// UpdateSeries statistic target samples info
+func (t *ScrapeStatus) UpdateSeries(load int64) {
 	if len(t.lastSeries) < 3 {
-		t.lastSeries = append(t.lastSeries, s)
+		t.lastSeries = append(t.lastSeries, load)
 	} else {
 		newSeries := make([]int64, 0)
 		newSeries = append(newSeries, t.lastSeries[1:]...)
-		newSeries = append(newSeries, s)
+		newSeries = append(newSeries, load)
 		t.lastSeries = newSeries
 	}
 

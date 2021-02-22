@@ -2,7 +2,7 @@ package scrape
 
 import (
 	"github.com/pkg/errors"
-	"github.com/prometheus/prometheus/config"
+	"tkestack.io/kvass/pkg/prom"
 )
 
 // Manager includes all jobs
@@ -10,7 +10,7 @@ type Manager struct {
 	jobs map[string]*JobInfo
 }
 
-// New create a Manager with specified cli set
+// New create a Manager with specified Cli set
 func New() *Manager {
 	return &Manager{
 		jobs: map[string]*JobInfo{},
@@ -18,10 +18,10 @@ func New() *Manager {
 }
 
 // ApplyConfig update Manager from config
-func (s *Manager) ApplyConfig(cfg *config.Config) error {
+func (s *Manager) ApplyConfig(cfg *prom.ConfigInfo) error {
 	ret := map[string]*JobInfo{}
-	for _, cfg := range cfg.ScrapeConfigs {
-		info, err := newJobInfo(cfg)
+	for _, cfg := range cfg.Config.ScrapeConfigs {
+		info, err := newJobInfo(*cfg)
 		if err != nil {
 			return errors.Wrap(err, cfg.JobName)
 		}
