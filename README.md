@@ -115,8 +115,8 @@ When the shard is emptied, the shard becomes idle, and wiil be deleted after a c
 You can set the idle time of Coordinaor using the following parameters and turn off shrinkage by set it to 0.
 
 > ```
-> - --shard.max-idle-time=3h // default
-> - --shard.max-idle-time=0 // disable scaling down
+> - --shard.max-idle-time=3h
+> - --shard.max-idle-time=0 // default
 > ```
 
 If `StatefulSet` is used to manage shards, you can add a parameter that will allow the Coordinator to automatically remove the `PVC` when the shard is removed

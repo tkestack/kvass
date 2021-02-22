@@ -66,7 +66,7 @@ func init() {
 	coordinatorCmd.Flags().IntVar(&cdCfg.shardPort, "shard.port", 8080, "the port of sidecar server")
 	coordinatorCmd.Flags().Int64Var(&cdCfg.shardMaxSeries, "shard.max-series", 1000000, "max series of per shard")
 	coordinatorCmd.Flags().Int32Var(&cdCfg.shardMaxShard, "shard.max-shard", 999999, "max shard number")
-	coordinatorCmd.Flags().DurationVar(&cdCfg.shardMaxIdleTime, "shard.max-idle-time", time.Hour*3,
+	coordinatorCmd.Flags().DurationVar(&cdCfg.shardMaxIdleTime, "shard.max-idle-time", 0,
 		"wait time before shard is removed after shard become idle,"+
 			"scale down is disabled if this flag is 0")
 	coordinatorCmd.Flags().BoolVar(&cdCfg.shardDeletePVC, "shard.delete-vpc", true, "kvass will delete pvc when shard is removed")

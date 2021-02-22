@@ -116,8 +116,8 @@ Coordinator 使用 label 选择器来选择分片的StatefulSets, 每一个State
 您可以通过Coordinaor的以下参数来设置闲置时间，当设置为0时关闭缩容。
 
 > ```
-> - --shard.max-idle-time=3h // 默认
-> - --shard.max-idle-time=0 // 关闭缩容
+> - --shard.max-idle-time=3h 
+> - --shard.max-idle-time=0 // 默认
 > ```
 
 如果使用的是Statefulset来管理分片，您可以添加一下参数来让Coordinator在删除分片时自动删除pvc
