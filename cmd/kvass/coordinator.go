@@ -69,7 +69,7 @@ func init() {
 	coordinatorCmd.Flags().DurationVar(&cdCfg.shardMaxIdleTime, "shard.max-idle-time", 0,
 		"wait time before shard is removed after shard become idle,"+
 			"scale down is disabled if this flag is 0")
-	coordinatorCmd.Flags().BoolVar(&cdCfg.shardDeletePVC, "shard.delete-vpc", true, "kvass will delete pvc when shard is removed")
+	coordinatorCmd.Flags().BoolVar(&cdCfg.shardDeletePVC, "shard.delete-pvc", true, "kvass will delete pvc when shard is removed")
 
 	coordinatorCmd.Flags().IntVar(&cdCfg.exploreMaxCon, "explore.concurrence", 50, "max explore concurrence")
 	coordinatorCmd.Flags().StringVar(&cdCfg.webAddress, "web.address", ":9090", "server bind address")
