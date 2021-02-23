@@ -10,7 +10,7 @@ require (
 	github.com/golang/protobuf v1.4.2 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/common v0.14.0
-	github.com/prometheus/prometheus v1.8.2-0.20201015110737-0a7fdd3b7696
+	github.com/prometheus/prometheus v2.25.0
 	github.com/sirupsen/logrus v1.6.0
 	github.com/spf13/cobra v1.0.0
 	github.com/stretchr/testify v1.5.1
