@@ -122,7 +122,7 @@ You can set the idle time of Coordinaor using the following parameters and turn 
 If `StatefulSet` is used to manage shards, you can add a parameter that will allow the Coordinator to automatically remove the `PVC` when the shard is removed
 
 > ```
-> - --shard.delete-vpc=true // default
+> - --shard.delete-pvc=true // default
 > ```
 
 # Demo
