@@ -25,7 +25,7 @@ Coordinator do service discovery, Prometheus shards management and assign target
       * [Shard scaling down](#Shard-scaling-down)
    * [Demo](#Demo)
    * [Best practice](#Best-practice)
-         * [Flag values suggestion](#Flag-values-suggestion)
+      * [Flag values suggestion](#Flag-values-suggestion)
    * [License](#license)
 
 
