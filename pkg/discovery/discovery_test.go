@@ -27,6 +27,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+	"tkestack.io/kvass/pkg/prom"
+	"tkestack.io/kvass/pkg/target"
 )
 
 func TestTargetsDiscovery_WaitInit(t *testing.T) {
@@ -61,7 +63,9 @@ func TestTargetsDiscovery_WaitInit(t *testing.T) {
 		t.Run(cs.name, func(t *testing.T) {
 			r := require.New(t)
 			d := New(logrus.New())
-			r.NoError(d.ApplyConfig(cfg))
+			r.NoError(d.ApplyConfig(&prom.ConfigInfo{
+				Config: cfg,
+			}))
 			d.activeTargets = cs.targets
 			ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
 			r.NoError(d.WaitInit(ctx))
@@ -78,6 +82,18 @@ func TestTargetsDiscovery_ActiveTargets(t *testing.T) {
 		},
 	}
 	require.Equal(t, 1, len(d.ActiveTargets()["job"]))
+}
+
+func TestTargetsDiscovery_ActiveTargetsByHash(t *testing.T) {
+	d := New(logrus.New())
+	d.activeTargets = map[string][]*SDTargets{
+		"job": {
+			{
+				ShardTarget: &target.Target{Hash: 1},
+			},
+		},
+	}
+	require.Equal(t, 1, len(d.ActiveTargetsByHash()))
 }
 
 func TestTargetsDiscovery_DropTargets(t *testing.T) {
@@ -116,7 +132,9 @@ func TestTargetsDiscovery_Run(t *testing.T) {
 			},
 		},
 	}
-	r.NoError(d.ApplyConfig(cfg))
+	r.NoError(d.ApplyConfig(&prom.ConfigInfo{
+		Config: cfg,
+	}))
 
 	sdChan := make(chan map[string][]*targetgroup.Group, 0)
 	ctx, cancel := context.WithCancel(context.Background())

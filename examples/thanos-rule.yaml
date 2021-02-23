@@ -1,66 +1,75 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: thanos-query
+  name: thanos-rule
   labels:
-    app.kubernetes.io/name: thanos-query
+    app.kubernetes.io/name: thanos-rule
 spec:
   ports:
     - name: grpc
       port: 10901
       targetPort: grpc
     - name: http
-      port: 9090
+      port: 10902
       targetPort: http
   selector:
-    app.kubernetes.io/name: thanos-query
+    app.kubernetes.io/name: thanos-rule
 ---
 
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
-  name: thanos-query
+  name: thanos-rule
   labels:
-    app.kubernetes.io/name: thanos-query
+    app.kubernetes.io/name: thanos-rule
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: thanos-query
+      app.kubernetes.io/name: thanos-rule
+  serviceName: ""
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: thanos-query
+        app.kubernetes.io/name: thanos-rule
     spec:
+      volumes:
+        - name: rules
+          configMap:
+            name: prometheus-rules
+            defaultMode: 420
       containers:
         - args:
-            - query
-            - --log.level=debug
-            - --query.auto-downsampling
-            - --grpc-address=0.0.0.0:10901
-            - --http-address=0.0.0.0:9090
-            - --query.partial-response
-            - --store=dnssrv+_grpc._tcp.prometheus.default.svc.cluster.local
-            - --store=dnssrv+_grpc._tcp.thanos-rule.default.svc.cluster.local
+            - rule
+            - --rule-file=/etc/thanos/rules/*.yaml
+            - --grpc-address=:10901
+            - --http-address=:10902
+            - --data-dir=/var/thanos/rule
+            - --query=dnssrv+_http._tcp.thanos-query.default.svc.cluster.local
+            - --eval-interval=10s
+            - --tsdb.retention=3h
           image: thanosio/thanos:v0.16.0-rc.1
+          volumeMounts:
+          - mountPath: /etc/thanos/rules
+            name: rules
           livenessProbe:
             failureThreshold: 4
             httpGet:
               path: /-/healthy
-              port: 9090
+              port: 10902
               scheme: HTTP
             periodSeconds: 30
           name: thanos-query
           ports:
             - containerPort: 10901
               name: grpc
-            - containerPort: 9090
+            - containerPort: 10902
               name: http
           readinessProbe:
             failureThreshold: 20
             httpGet:
               path: /-/ready
-              port: 9090
+              port: 10902
               scheme: HTTP
             periodSeconds: 5
           terminationMessagePolicy: FallbackToLogsOnError

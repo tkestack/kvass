@@ -37,16 +37,19 @@ import (
 // otherwise, Proxy do real tManager, statistic metrics samples and return metrics to prometheus
 type Proxy struct {
 	targetsLock sync.Mutex
-	spManager   *scrape.Manager
-	targets     map[uint64]*target.ScrapeStatus
+	getJob      func(jobName string) *scrape.JobInfo
+	getStatus   func() map[uint64]*target.ScrapeStatus
 	log         logrus.FieldLogger
 }
 
 // NewProxy create a new proxy server
-func NewProxy(spManager *scrape.Manager, log logrus.FieldLogger) *Proxy {
+func NewProxy(
+	getJob func(jobName string) *scrape.JobInfo,
+	getStatus func() map[uint64]*target.ScrapeStatus,
+	log logrus.FieldLogger) *Proxy {
 	return &Proxy{
-		spManager: spManager,
-		targets:   map[uint64]*target.ScrapeStatus{},
+		getJob:    getJob,
+		getStatus: getStatus,
 		log:       log,
 	}
 }
@@ -56,34 +59,10 @@ func (p *Proxy) Run(address string) error {
 	return http.ListenAndServe(address, p)
 }
 
-// UpdateTargets update scraping targets according to new SD result
-func (p *Proxy) UpdateTargets(groups map[string][]*target.Target) error {
-	p.targetsLock.Lock()
-	defer p.targetsLock.Unlock()
-
-	newTargets := map[uint64]*target.ScrapeStatus{}
-	for _, ts := range groups {
-		for _, t := range ts {
-			old := p.targets[t.Hash]
-			if old == nil {
-				old = target.NewScrapeStatus(t.Series)
-			}
-			newTargets[t.Hash] = old
-		}
-	}
-	p.targets = newTargets
-	return nil
-}
-
-// TargetStatus return current targets status
-func (p *Proxy) TargetStatus() map[uint64]*target.ScrapeStatus {
-	return p.targets
-}
-
 // ServeHTTP handle one Proxy request
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	job, hashStr, realURL := translateURL(*r.URL)
-	jobInfo := p.spManager.GetJob(job)
+	jobInfo := p.getJob(job)
 	if jobInfo == nil {
 		p.log.Errorf("can not found job client of %s", job)
 		w.WriteHeader(http.StatusBadRequest)
@@ -97,33 +76,31 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tar := p.targets[hash]
-	if tar == nil {
-		p.log.Errorf("unexpect tar : %d", hash)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+	tar := p.getStatus()[hash]
 
 	start := time.Now()
 	var scrapErr error
 	defer func() {
-		tar.SetScrapeErr(start, scrapErr)
+		if tar != nil {
+			tar.ScrapeTimes++
+			tar.SetScrapeErr(start, scrapErr)
+		}
+
 		if scrapErr != nil {
-			p.log.Errorf("%s/%s : %s", job, realURL.String(), scrapErr.Error())
+			p.log.Error(err.Error())
 			w.WriteHeader(http.StatusBadRequest)
 		}
 	}()
 
-	// real scraping
 	data, contentType, err := jobInfo.Scrape(realURL.String())
 	if err != nil {
 		scrapErr = fmt.Errorf("get data %v", err)
 		return
 	}
 
-	samples, err := scrape.StatisticSample(data, contentType, jobInfo.Config.MetricRelabelConfigs)
+	series, err := scrape.StatisticSeries(data, contentType, jobInfo.Config.MetricRelabelConfigs)
 	if err != nil {
-		scrapErr = fmt.Errorf("statisticSample failed %v", err)
+		scrapErr = fmt.Errorf("StatisticSeries failed %v", err)
 		return
 	}
 
@@ -136,7 +113,9 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tar.UpdateSamples(samples)
+	if tar != nil {
+		tar.UpdateSeries(series)
+	}
 }
 
 func translateURL(u url.URL) (job string, hash string, realURL url.URL) {

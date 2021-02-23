@@ -42,6 +42,7 @@ spec:
             - --config-envsubst-file=/etc/prometheus/config_out/prometheus.env.yaml
           image: rancher/coreos-prometheus-config-reloader:v0.32.0
           imagePullPolicy: Always
+
           resources:
             limits:
               memory: 50Mi
@@ -60,6 +61,7 @@ spec:
             - --shard.selector=app.kubernetes.io/name=prometheus
             - --shard.namespace=$(NAMESPACE)
             - --config.file=/etc/prometheus/config_out/prometheus.env.yaml
+            - --shard.max-idle-time=0
           env:
             - name: NAMESPACE
               valueFrom:

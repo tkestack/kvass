@@ -18,6 +18,7 @@
 package shard
 
 import (
+	"time"
 	"tkestack.io/kvass/pkg/target"
 )
 
@@ -33,6 +34,10 @@ type Manager interface {
 type RuntimeInfo struct {
 	// HeadSeries return current head_series of prometheus
 	HeadSeries int64 `json:"headSeries"`
+	// ConfigMD5 is the md5 of current config file
+	ConfigMD5 string `json:"ConfigMD5"`
+	// IdleStartAt is the time that shard begin idle
+	IdleStartAt *time.Time
 }
 
 // UpdateTargetsRequest contains all information about the targets updating request

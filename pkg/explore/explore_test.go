@@ -31,13 +31,14 @@ import (
 	"testing"
 	"time"
 	"tkestack.io/kvass/pkg/discovery"
+	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/target"
 )
 
 func TestExplore_UpdateTargets(t *testing.T) {
 	e := New(scrape.New(), logrus.New())
-	require.Nil(t, e.Get("job1", 1))
+	require.Nil(t, e.Get(1))
 	e.UpdateTargets(map[string][]*discovery.SDTargets{
 		"job1": {&discovery.SDTargets{
 			ShardTarget: &target.Target{
@@ -46,16 +47,22 @@ func TestExplore_UpdateTargets(t *testing.T) {
 			},
 		}},
 	})
-	require.NotNil(t, e.Get("job1", 1))
+	r := e.Get(1)
+	require.NotNil(t, r)
+	require.True(t, e.targets[1].exploring)
 }
 
 func TestExplore_Run(t *testing.T) {
 	r := require.New(t)
 	sm := scrape.New()
-	r.NoError(sm.ApplyConfig(&config.Config{
-		ScrapeConfigs: []*config.ScrapeConfig{
-			{
-				JobName: "job1",
+	r.NoError(sm.ApplyConfig(&prom.ConfigInfo{
+		RawContent: nil,
+		Md5:        "",
+		Config: &config.Config{
+			ScrapeConfigs: []*config.ScrapeConfig{
+				{
+					JobName: "job1",
+				},
 			},
 		},
 	}))
@@ -102,8 +109,10 @@ func TestExplore_Run(t *testing.T) {
 		}},
 	})
 
+	res := e.Get(1)
+	r.Equal(scrape2.HealthUnknown, res.Health)
 	time.Sleep(time.Second)
-	res := e.Get("job1", 1)
+	res = e.Get(1)
 	r.NotNil(res)
 	r.Equal(scrape2.HealthGood, res.Health)
 	r.Equal(int64(1), res.Series)
@@ -121,6 +130,6 @@ func TestExplore_ApplyConfig(t *testing.T) {
 			},
 		}},
 	})
-	r.NoError(e.ApplyConfig(&config.Config{}))
-	require.Nil(t, e.Get("job1", 1))
+	r.NoError(e.ApplyConfig(&prom.ConfigInfo{Config: &config.Config{}}))
+	require.Nil(t, e.Get(1))
 }

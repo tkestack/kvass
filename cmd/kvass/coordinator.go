@@ -22,8 +22,8 @@ import (
 	k8sd "github.com/prometheus/prometheus/discovery/kubernetes"
 	"net/url"
 	"path"
-	"sync"
 	"time"
+	"tkestack.io/kvass/pkg/prom"
 
 	"github.com/go-kit/kit/log"
 	config_util "github.com/prometheus/common/config"
@@ -41,23 +41,23 @@ import (
 	"tkestack.io/kvass/pkg/discovery"
 	"tkestack.io/kvass/pkg/explore"
 	"tkestack.io/kvass/pkg/scrape"
-	"tkestack.io/kvass/pkg/shard"
 	k8s_shard "tkestack.io/kvass/pkg/shard/kubernetes"
-	"tkestack.io/kvass/pkg/target"
 )
 
 var cdCfg = struct {
-	shardNamespace string
-	shardSelector  string
-	shardPort      int
-	shardMaxSeries int64
-	shardMaxShard  int32
-	exploreMaxCon  int
-	webAddress     string
-	configFile     string
-	syncInterval   time.Duration
-	sdInitTimeout  time.Duration
-	configInject   configInjectOption
+	shardNamespace   string
+	shardSelector    string
+	shardPort        int
+	shardMaxSeries   int64
+	shardMaxShard    int32
+	shardMaxIdleTime time.Duration
+	shardDeletePVC   bool
+	exploreMaxCon    int
+	webAddress       string
+	configFile       string
+	syncInterval     time.Duration
+	sdInitTimeout    time.Duration
+	configInject     configInjectOption
 }{}
 
 func init() {
@@ -66,6 +66,11 @@ func init() {
 	coordinatorCmd.Flags().IntVar(&cdCfg.shardPort, "shard.port", 8080, "the port of sidecar server")
 	coordinatorCmd.Flags().Int64Var(&cdCfg.shardMaxSeries, "shard.max-series", 1000000, "max series of per shard")
 	coordinatorCmd.Flags().Int32Var(&cdCfg.shardMaxShard, "shard.max-shard", 999999, "max shard number")
+	coordinatorCmd.Flags().DurationVar(&cdCfg.shardMaxIdleTime, "shard.max-idle-time", 0,
+		"wait time before shard is removed after shard become idle,"+
+			"scale down is disabled if this flag is 0")
+	coordinatorCmd.Flags().BoolVar(&cdCfg.shardDeletePVC, "shard.delete-vpc", true, "kvass will delete pvc when shard is removed")
+
 	coordinatorCmd.Flags().IntVar(&cdCfg.exploreMaxCon, "explore.concurrence", 50, "max explore concurrence")
 	coordinatorCmd.Flags().StringVar(&cdCfg.webAddress, "web.address", ":9090", "server bind address")
 	coordinatorCmd.Flags().StringVar(&cdCfg.configFile, "config.file", "prometheus.yml", "config file path")
@@ -114,52 +119,54 @@ distribution targets to shards`,
 			discoveryManagerScrape = prom_discovery.NewManager(context.Background(), log.With(logger, "component", "discovery manager scrape"), prom_discovery.Name("scrape"))
 			targetDiscovery        = discovery.New(lg.WithField("component", "target discovery"))
 			exp                    = explore.New(scrapeManager, lg.WithField("component", "explore"))
+			cfgManager             = prom.NewConfigManager(cdCfg.configFile, lg.WithField("component", "config manager"))
 
 			ins = k8s_shard.New(cli, cdCfg.shardNamespace,
 				cdCfg.shardSelector,
 				cdCfg.shardPort,
+				cdCfg.shardDeletePVC,
 				lg.WithField("component", "shard manager"))
 
 			cd = coordinator.NewCoordinator(
 				ins,
 				cdCfg.shardMaxSeries,
 				cdCfg.shardMaxShard,
+				cdCfg.shardMaxIdleTime,
 				cdCfg.syncInterval,
+				func() string {
+					return cfgManager.ConfigInfo().Md5
+				},
 				exp.Get,
-				targetDiscovery.ActiveTargets,
+				targetDiscovery.ActiveTargetsByHash,
 				lg.WithField("component", "coordinator"))
 		)
 
-		configApply := []func(cfg *config.Config) error{
-			func(cfg *config.Config) error {
-				return configInject(cfg, &cdCfg.configInject)
+		cfgManager.AddReloadCallbacks(
+			func(cfg *prom.ConfigInfo) error {
+				return configInject(cfg.Config, &cdCfg.configInject)
 			},
-
 			scrapeManager.ApplyConfig,
 			exp.ApplyConfig,
 			targetDiscovery.ApplyConfig,
-			func(cfg *config.Config) error {
+			func(cfg *prom.ConfigInfo) error {
 				c := make(map[string]prom_discovery.Configs)
-				for _, v := range cfg.ScrapeConfigs {
+				for _, v := range cfg.Config.ScrapeConfigs {
 					c[v.JobName] = v.ServiceDiscoveryConfigs
 				}
 				return discoveryManagerScrape.ApplyConfig(c)
 			},
-		}
+		)
 
 		svc := coordinator.NewService(
-			cdCfg.configFile,
-			configApply,
-			func(targets map[string][]*discovery.SDTargets) (statuses map[uint64]*target.ScrapeStatus, e error) {
-				return getTargetStatus(lg, ins, exp, targets)
-			},
+			cfgManager,
+			cd.LastGlobalScrapeStatus,
 			targetDiscovery.ActiveTargets,
 			targetDiscovery.DropTargets,
 			lg.WithField("component", "web"),
 		)
 
-		if err := svc.Init(); err != nil {
-			lg.Fatalf(err.Error())
+		if err := cfgManager.Reload(); err != nil {
+			panic(err)
 		}
 
 		g := errgroup.Group{}
@@ -206,49 +213,6 @@ distribution targets to shards`,
 	},
 }
 
-func getTargetStatus(lg logrus.FieldLogger, manager shard.Manager, exp *explore.Explore, targets map[string][]*discovery.SDTargets) (statuses map[uint64]*target.ScrapeStatus, e error) {
-	shards, err := manager.Shards()
-	if err != nil {
-		return nil, err
-	}
-
-	global := map[uint64]*target.ScrapeStatus{}
-	l := sync.Mutex{}
-	g := errgroup.Group{}
-	for _, temp := range shards {
-		s := temp
-		g.Go(func() error {
-			res, err := s.TargetStatus()
-			if err != nil {
-				return err
-			}
-			l.Lock()
-			defer l.Unlock()
-			for hash, v := range res {
-				global[hash] = v
-			}
-			return nil
-		})
-	}
-
-	_ = g.Wait()
-
-	ret := map[uint64]*target.ScrapeStatus{}
-	for job, ts := range targets {
-		for _, t := range ts {
-			hash := t.ShardTarget.Hash
-			rt := global[hash]
-			if rt == nil {
-				lg.Infof("%d not found in global", hash)
-				rt = exp.Get(job, hash)
-			}
-			ret[hash] = rt
-		}
-	}
-
-	return ret, nil
-}
-
 type configInjectOption struct {
 	kubernetes struct {
 		url                string
@@ -293,13 +257,12 @@ func configInject(cfg *config.Config, option *configInjectOption) error {
 		}
 
 		if option.kubernetes.serviceAccountPath != "" {
-			if job.HTTPClientConfig.TLSConfig.CAFile == "" {
-				if job.HTTPClientConfig.TLSConfig.CAFile == "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" {
-					job.HTTPClientConfig.TLSConfig.CAFile = path.Join(option.kubernetes.serviceAccountPath, "ca.crt")
-				}
-				if job.HTTPClientConfig.BearerTokenFile == "/var/run/secrets/kubernetes.io/serviceaccount/token" {
-					job.HTTPClientConfig.BearerTokenFile = path.Join(option.kubernetes.serviceAccountPath, "token")
-				}
+			if job.HTTPClientConfig.TLSConfig.CAFile == "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" {
+				job.HTTPClientConfig.TLSConfig.CAFile = path.Join(option.kubernetes.serviceAccountPath, "ca.crt")
+			}
+
+			if job.HTTPClientConfig.BearerTokenFile == "" || job.HTTPClientConfig.BearerTokenFile == "/var/run/secrets/kubernetes.io/serviceaccount/token" {
+				job.HTTPClientConfig.BearerTokenFile = path.Join(option.kubernetes.serviceAccountPath, "token")
 			}
 		}
 	}

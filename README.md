@@ -13,15 +13,19 @@ Coordinator do service discovery, Prometheus shards management and assign target
 
 # Table of Contents
    * [Overview](#overview)
-   * [Architecture](#architecture)
+   * [Design](#Design)
       * [Components](#components)
          * [Coordinator](#coordinator)
          * [Sidecar](#sidecar)
       * [Kvass + Thanos](#kvass--thanos)
       * [Kvass + Remote storage](#kvass--remote-storage)
       * [Multiple replicas](#multiple-replicas)
+      * [Targets transfer](#Targets-transfer)
+      * [Shard de-pressure](#Shard-de-pressure)
+      * [Shard scaling down](#Shard-scaling-down)
    * [Demo](#Demo)
-   * [Flag values suggestion](#Flag-values-suggestion)
+   * [Best practice](#Best-practice)
+         * [Flag values suggestion](#Flag-values-suggestion)
    * [License](#license)
 
 
@@ -36,7 +40,7 @@ Kvass is a Prometheus horizontal auto-scaling solution with following features.
 * Sharding according to the actual target load instead of label hash
 * Multiple replicas supported
 
-# Architecture
+# Design
 
 <img src="./README.assets/image-20201126031456582.png" alt="image-20201126031456582" style="zoom:50%;" />
 
@@ -84,6 +88,43 @@ Coordinator use label selector to select shards StatefulSets, every StatefulSet 
 
 > --shard.selector=app.kubernetes.io/name=prometheus
 
+## Targets transfer
+
+There are scenarios where we need to move an assigned Target from one shard to another (for example, to de-pressure a shard).
+
+In order to keep scraping normally, the Target transfer is divided into the following steps.
+
+* Mark the state of the Target in the original shard as IN_TRANSFER, and assign the Target to another shard  with the state as Normal.
+* Wait for the Target to be scraped by both shards for at least 3 times.
+* Delete Target from the original shard.
+
+## Shard de-pressure
+
+The series of Target products may increase over time, and the head series of shard may exceeding the threshold, such as the newly added `K8S node`, whose `cadvisor` data size may increase as `POD` is scheduled.
+
+When the head series of a shard exceeds a certain proportion of the threshold, the Coordinator will attempt to de-pressurize the shard. That is, according to the proportion of the shard exceeding the threshold, the Coordinator will transfer some targets from the shard to other free shards. The higher the proportion of the shard exceeding the threshold, the more targets will be transferred.
+
+## Shard scaling down
+
+Scaling down will only start at the largest shard.
+
+When all targets on the highest-numbered shard can be migrated to other shards, a transfer attempt is made, which empties the highest-numbered shard.
+
+When the shard is emptied, the shard becomes idle, and wiil be deleted after a certain period of time (waiting for the shard data to be deleted or uploaded to object storage).
+
+You can set the idle time of Coordinaor using the following parameters and turn off shrinkage by set it to 0.
+
+> ```
+> - --shard.max-idle-time=3h
+> - --shard.max-idle-time=0 // default
+> ```
+
+If `StatefulSet` is used to manage shards, you can add a parameter that will allow the Coordinator to automatically remove the `PVC` when the shard is removed
+
+> ```
+> - --shard.delete-vpc=true // default
+> ```
+
 # Demo
 
 There is a example to show how Kvass work.
@@ -122,7 +163,9 @@ but we can get global data view use thanos-query
 
 ![image-20200917112711674](./README.assets/image-20200917112711674.png)
 
-#  Flag values suggestion
+# Best practice
+
+## Flag values suggestion
 
 The memory useage of every Prometheus is associated with the max head series.
 

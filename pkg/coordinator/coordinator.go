@@ -20,8 +20,6 @@ package coordinator
 import (
 	"context"
 	"github.com/pkg/errors"
-	"github.com/prometheus/prometheus/scrape"
-	"golang.org/x/sync/errgroup"
 	"time"
 	"tkestack.io/kvass/pkg/discovery"
 	"tkestack.io/kvass/pkg/shard"
@@ -33,14 +31,17 @@ import (
 
 // Coordinator periodically re balance all replicates
 type Coordinator struct {
-	log          logrus.FieldLogger
-	shardManager shard.Manager
-	maxSeries    int64
-	maxShard     int32
-	period       time.Duration
+	log                    logrus.FieldLogger
+	shardManager           shard.Manager
+	maxSeries              int64
+	maxShard               int32
+	maxIdleTime            time.Duration
+	period                 time.Duration
+	lastGlobalScrapeStatus map[uint64]*target.ScrapeStatus
 
-	getExploreResult func(job string, hash uint64) *target.ScrapeStatus
-	getActive        func() map[string][]*discovery.SDTargets
+	getConfigMd5     func() string
+	getExploreResult func(hash uint64) *target.ScrapeStatus
+	getActive        func() map[uint64]*discovery.SDTargets
 }
 
 // NewCoordinator create a new coordinator service
@@ -48,16 +49,20 @@ func NewCoordinator(
 	shardManager shard.Manager,
 	maxSeries int64,
 	maxShard int32,
+	maxIdleTime time.Duration,
 	period time.Duration,
-	getExploreResult func(job string, hash uint64) *target.ScrapeStatus,
-	getActive func() map[string][]*discovery.SDTargets,
+	getConfigMd5 func() string,
+	getExploreResult func(hash uint64) *target.ScrapeStatus,
+	getActive func() map[uint64]*discovery.SDTargets,
 	log logrus.FieldLogger) *Coordinator {
 	return &Coordinator{
 		shardManager:     shardManager,
+		getConfigMd5:     getConfigMd5,
 		getExploreResult: getExploreResult,
 		getActive:        getActive,
 		maxShard:         maxShard,
 		maxSeries:        maxSeries,
+		maxIdleTime:      maxIdleTime,
 		log:              log,
 		period:           period,
 	}
@@ -65,172 +70,42 @@ func NewCoordinator(
 
 // Run do coordinate periodically until ctx done
 func (c *Coordinator) Run(ctx context.Context) error {
-	return wait.RunUntil(ctx, c.log, c.period, c.RunOnce)
+	return wait.RunUntil(ctx, c.log, c.period, c.runOnce)
 }
 
-type shardInfo struct {
-	isHealth   bool
-	shard      *shard.Group
-	runtime    *shard.RuntimeInfo
-	scraping   map[uint64]bool
-	newTargets map[string][]*target.Target
+// LastGlobalScrapeStatus return the last scraping status of last coordinate
+func (c *Coordinator) LastGlobalScrapeStatus() map[uint64]*target.ScrapeStatus {
+	return c.lastGlobalScrapeStatus
 }
 
-// RunOnce get shards information from shard manager,
+// runOnce get shards information from shard manager,
 // do shard reBalance and change expect shard number
-func (c *Coordinator) RunOnce() error {
+func (c *Coordinator) runOnce() error {
 	shards, err := c.shardManager.Shards()
 	if err != nil {
 		return errors.Wrapf(err, "Shards")
 	}
 
-	shardsInfo := c.getShardsInfo(shards)
-	scraping := c.globalScraping(shardsInfo)
-	exp, err := c.reBalance(shardsInfo, scraping)
-	if err != nil {
-		return errors.Wrapf(err, "reBalance")
+	var (
+		active           = c.getActive()
+		shardsInfo       = getShardInfos(shards, c.getConfigMd5(), c.log)
+		changeAbleShards = changeAbleShardsInfo(shardsInfo)
+	)
+
+	c.lastGlobalScrapeStatus = globalScrapeStatus(active, shardsInfo, c.getExploreResult)
+	gcTargets(changeAbleShards, active, c.log)
+	needSpace := alleviateShards(changeAbleShards, c.maxSeries, c.log)
+	needSpace += assignNoScrapingTargets(shardsInfo, active, c.maxSeries, c.lastGlobalScrapeStatus)
+
+	scale := int32(len(shardsInfo))
+	if needSpace != 0 {
+		c.log.Infof("need space %d", needSpace)
+		scale = tryScaleUp(shardsInfo, needSpace, c.maxSeries, c.maxShard)
+	} else if c.maxIdleTime != 0 {
+		scale = tryScaleDown(shardsInfo, c.maxSeries, c.maxIdleTime, c.log)
 	}
 
-	return c.shardManager.ChangeScale(exp)
-}
-
-func (c *Coordinator) reBalance(
-	shardsInfo []*shardInfo,
-	scraping map[uint64]*shardInfo,
-) (int32, error) {
-	needSpace := int64(0)
-	for job, ts := range c.getActive() {
-		for _, target := range ts {
-			t := target.ShardTarget
-			sd := scraping[t.Hash]
-			// target is scraping by this shard group
-			if sd != nil {
-				sd.newTargets[job] = append(sd.newTargets[job], t)
-				continue
-			}
-
-			// if no shard scraping this target, we try assign it
-			exp := c.getExploreResult(job, t.Hash)
-			if exp == nil {
-				continue
-			}
-
-			// this target is explored, assign it
-			if exp.Health == scrape.HealthGood {
-				found := false
-				if exp.Series > c.maxSeries {
-					c.log.Errorf("target too big %s (%d)", t.NoParamURL(), exp.Series)
-					continue
-				}
-				for _, s := range shardsInfo {
-					if !s.isHealth {
-						continue
-					}
-
-					if s.runtime.HeadSeries+exp.Series < c.maxSeries {
-						s.runtime.HeadSeries += exp.Series
-						t.Series = exp.Series
-						s.newTargets[job] = append(s.newTargets[job], t)
-						found = true
-						break
-					}
-				}
-
-				if !found {
-					needSpace += exp.Series
-				}
-			}
-		}
-	}
-	c.applyShardsInfo(shardsInfo)
-
-	exp := int32(0)
-	for _, s := range shardsInfo {
-		if s.isHealth {
-			exp++
-		}
-	}
-
-	if needSpace > 0 {
-		exp += int32(needSpace/c.maxSeries + 1)
-		c.log.Infof("need space %d need exp = %d", needSpace, int32(needSpace/c.maxSeries+1))
-	}
-
-	if exp > c.maxShard {
-		c.log.Warnf("expect scale is %d but the max is %d", exp, c.maxShard)
-		exp = c.maxShard
-	}
-
-	return exp, nil
-}
-
-func (c *Coordinator) globalScraping(info []*shardInfo) map[uint64]*shardInfo {
-	ret := map[uint64]*shardInfo{}
-	for _, s := range info {
-		for k := range s.scraping {
-			if ret[k] != nil {
-				c.log.Warnf("target (%d) is already scraping by %s when %s mark global scraping",
-					k, ret[k].shard.ID, s.shard.ID,
-				)
-				continue
-			}
-			ret[k] = s
-		}
-	}
-
-	return ret
-}
-
-func (c *Coordinator) getShardsInfo(shards []*shard.Group) []*shardInfo {
-	all := make([]*shardInfo, len(shards))
-	g := errgroup.Group{}
-	for index, tmp := range shards {
-		s := tmp
-		i := index
-		g.Go(func() (err error) {
-			si := &shardInfo{
-				isHealth:   true,
-				shard:      s,
-				newTargets: map[string][]*target.Target{},
-			}
-
-			si.scraping, err = s.TargetsScraping()
-			if err != nil {
-				c.log.Error(err.Error())
-				si.isHealth = false
-				si.scraping = map[uint64]bool{}
-			}
-
-			si.runtime, err = s.RuntimeInfo()
-			if err != nil {
-				c.log.Error(err.Error())
-				si.isHealth = false
-			}
-
-			all[i] = si
-			return nil
-		})
-	}
-	_ = g.Wait()
-	return all
-}
-
-func (c *Coordinator) applyShardsInfo(shards []*shardInfo) {
-	g := errgroup.Group{}
-	for _, tmp := range shards {
-		s := tmp
-		if !s.isHealth {
-			c.log.Warnf("shard group %s is unHealth, skip apply change", s.shard.ID)
-			continue
-		}
-
-		g.Go(func() (err error) {
-			if err := s.shard.UpdateTarget(&shard.UpdateTargetsRequest{Targets: s.newTargets}); err != nil {
-				c.log.Error(err.Error())
-				return err
-			}
-			return nil
-		})
-	}
-	_ = g.Wait()
+	updateScrapingTargets(shardsInfo, active)
+	applyShardsInfo(shardsInfo, c.log)
+	return c.shardManager.ChangeScale(scale)
 }

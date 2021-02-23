@@ -2,8 +2,8 @@
 
 [English](README.md)
 
-Kvass 是一个 [Prometheus](https://github.com/prometheus/prometheus) 横向扩缩容解决方案，他使用Sidecar动态得根据Coordinator分配下来的target列表来为每个Prometheus生成只含特定target的配置文件，从而将采集任务分散到各个Prometheus分片。
-Coordinator 用于服务发现，target分配和分片扩缩容管理.
+Kvass 是一个 [Prometheus](https://github.com/prometheus/prometheus) 横向扩缩容解决方案，他使用Sidecar动态得根据Coordinator分配下来的target列表来为每个Prometheus生成只含特定target的配置文件，从而将采集任务动态调度到各个Prometheus分片。
+Coordinator 用于服务发现，target调度和分片扩缩容管理.
 [Thanos](https://github.com/thanos-io/thanos) (或者其他TSDB) 用来将分片数据汇总成全局数据.
 
   [![Go Report Card](https://goreportcard.com/badge/github.com/tkestack/kvass)](https://goreportcard.com/report/github.com/tkestack/kvass)  [![Build](https://github.com/tkestack/kvass/workflows/Build/badge.svg?branch=master)]()   [![codecov](https://codecov.io/gh/tkestack/kvass/branch/master/graph/badge.svg)](https://codecov.io/gh/tkestack/kvass)
@@ -11,31 +11,37 @@ Coordinator 用于服务发现，target分配和分片扩缩容管理.
 ------
 
 # 目录
-   * [概览](#目录)
-   * [架构](#架构)
+   * [概述](#概述)
+   * [设计](#设计)
+         * [核心架构](#核心架构)
       * [组件](#组件)
          * [Coordinator](#coordinator)
          * [Sidecar](#sidecar)
       * [Kvass + Thanos](#kvass--thanos)
       * [Kvass + 远程存储](#kvass--远程存储)
       * [多副本](#多副本)
-   * [安装Demo](#安装Demo)
-   * [启动参数推荐](#启动参数推荐)
+      * [Target迁移原理](#Target迁移原理)
+      * [分片降压](#分片降压)
+      * [分片缩容](#分片缩容)
+   * [Demo体验](#Demo体验)
+   * [最佳实践](#最佳实践)
+         * [启动参数推荐](#启动参数推荐)
    * [License](#license)
 
-
-# 目录
+# 概述
 
 Kvass 是一个 [Prometheus](https://github.com/prometheus/prometheus) 横向扩缩容解决方案，他有以下特点. 
 
 * 轻量，安装方便
 * 支持数千万series规模 (数千k8s节点)
 * 无需修改Prometheus配置文件，无需加入hash_mod
-* 分片自动扩缩容
+* target动态调度
 * 根据target实际数据规模来进行分片复杂均衡，而不是用hash_mod
 * 支持多副本
 
-# 架构
+# 设计
+
+## 核心架构
 
 <img src="./README.assets/image-20201126031456582.png" alt="image-20201126031456582" style="zoom:50%;" />
 
@@ -47,7 +53,7 @@ Kvass 是一个 [Prometheus](https://github.com/prometheus/prometheus) 横向扩
 
 * Coordinaotr 加载配置文件并进行服务发现，获取所有target
 * 对于每个需要采集的target, Coordinator 为其应用配置文件中的"relabel_configs"，并且探测target负载
-* Coordinaotr 周期性将未分配的target分配给分片，根据分片当前的Head series进行选择
+* Coordinaotr 周期性分配新Target，转移Target，以及进行分片的缩容。
 
 <img src="./README.assets/image-20201126031409284.png" alt="image-20201126031409284" style="zoom:50%;" />
 
@@ -82,6 +88,43 @@ Kvass 是一个 [Prometheus](https://github.com/prometheus/prometheus) 横向扩
 Coordinator 使用 label 选择器来选择分片的StatefulSets, 每一个StatefulSet被认为是一个副本, Kvass将标号相同的不同.StatefulSet的Pod进行编组，同组的Prometheus将被分配相同的target，并预期有相同的负载。
 
 > --shard.selector=app.kubernetes.io/name=prometheus
+
+## Target迁移原理
+
+在某些场景下我们需要将一个已分配的Target从一个分片转移到另外一个分片（例如为分片降压）。
+
+为了保证数据不断点，Target迁移被分为以下几个步骤。
+
+* 将原在所在分片中该Target的状态标记为in_transfer，并将Target同时分配给目标分片，状态为normal。
+* 等待Target被2个分片同时采集至少3个周期。
+* 将原来分片中的Target删除。
+
+## 分片降压
+
+当一个Target分片给一个分片后，随着时间推移，Target产品的series有可能增加，从而导致分片的head series超过阈值，例如新加入的k8s节点，其cadvisor数据规模就有可能随着Pod被调度上来而增加。
+
+当分片head series超过阈值一定比例后，Coordinator会尝试做分片的降压处理，即根据超过阈值的比例，将一部分Target从该分片转移到其他空闲分片中，超过阈值比例越高，被转移的Target就越多。
+
+## 分片缩容
+
+分片缩容只会从标号最大的分片开始。
+
+当编号最大的分片上所有Target都可以被迁移到其他分片，就会尝试进行迁移，即清空编号最大的分片。
+
+当分片被清空后，分片会变为闲置状态，经过一段时间后（等待分片数据被删除或者被上传至对象存储），分片被删除。
+
+您可以通过Coordinaor的以下参数来设置闲置时间，当设置为0时关闭缩容。
+
+> ```
+> - --shard.max-idle-time=3h 
+> - --shard.max-idle-time=0 // 默认
+> ```
+
+如果使用的是Statefulset来管理分片，您可以添加一下参数来让Coordinator在删除分片时自动删除pvc
+
+> ```
+> - --shard.delete-vpc=true // 默认
+> ```
 
 # 安装Demo
 
@@ -121,7 +164,9 @@ Coordinator自动将分片个数变成3，并将6个target分配给他们.
 
 ![image-20200917112711674](./README.assets/image-20200917112711674.png)
 
-#  启动参数推荐
+# 最佳实践
+
+## 启动参数推荐
 
 Prometheus的内存使用量和head series有关。
 

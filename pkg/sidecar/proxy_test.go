@@ -21,6 +21,7 @@ import (
 	scrape2 "github.com/prometheus/prometheus/scrape"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -33,28 +34,16 @@ func TestProxy_ServeHTTP(t *testing.T) {
 	var cases = []struct {
 		name             string
 		job              *config.ScrapeConfig
-		target           map[string][]*target.Target
+		status           map[uint64]*target.ScrapeStatus
 		uri              string
 		data             string
 		wantStatusCode   int
 		wantTargetStatus map[uint64]*target.ScrapeStatus
 	}{
 		{
-			name: "job not found",
-			job:  &config.ScrapeConfig{JobName: "job2"},
-			target: map[string][]*target.Target{
-				"job1": {{Hash: 1, Series: 1}},
-			},
-			uri:            "/metrics?_jobName=job1&_scheme=http&_hash=1",
-			wantStatusCode: http.StatusBadRequest,
-			wantTargetStatus: map[uint64]*target.ScrapeStatus{
-				1: target.NewScrapeStatus(1),
-			},
-		},
-		{
-			name:             "target not found",
-			job:              &config.ScrapeConfig{JobName: "job1"},
-			target:           map[string][]*target.Target{},
+			name:             "job not found",
+			job:              nil,
+			status:           map[uint64]*target.ScrapeStatus{},
 			uri:              "/metrics?_jobName=job1&_scheme=http&_hash=1",
 			wantStatusCode:   http.StatusBadRequest,
 			wantTargetStatus: map[uint64]*target.ScrapeStatus{},
@@ -62,7 +51,7 @@ func TestProxy_ServeHTTP(t *testing.T) {
 		{
 			name:             "invalid hash",
 			job:              &config.ScrapeConfig{JobName: "job1"},
-			target:           map[string][]*target.Target{},
+			status:           map[uint64]*target.ScrapeStatus{},
 			uri:              "/metrics?_jobName=job1&_scheme=http&_hash=xxxx",
 			wantStatusCode:   http.StatusBadRequest,
 			wantTargetStatus: map[uint64]*target.ScrapeStatus{},
@@ -70,24 +59,25 @@ func TestProxy_ServeHTTP(t *testing.T) {
 		{
 			name: "scrape failed",
 			job:  &config.ScrapeConfig{JobName: "job1"},
-			target: map[string][]*target.Target{
-				"job1": {{Hash: 1, Series: 1}},
+			status: map[uint64]*target.ScrapeStatus{
+				1: {},
 			},
 			uri:            "/metrics?_jobName=job1&_scheme=http&_hash=1",
 			data:           ``,
 			wantStatusCode: http.StatusBadRequest,
 			wantTargetStatus: map[uint64]*target.ScrapeStatus{
 				1: {
-					Health: scrape2.HealthBad,
-					Series: 1,
+					Health:      scrape2.HealthBad,
+					Series:      0,
+					TargetState: target.StateInTransfer,
 				},
 			},
 		},
 		{
 			name: "scrape success",
 			job:  &config.ScrapeConfig{JobName: "job1"},
-			target: map[string][]*target.Target{
-				"job1": {{Hash: 1, Series: 1}},
+			status: map[uint64]*target.ScrapeStatus{
+				1: {},
 			},
 			uri:            "/metrics?_jobName=job1&_scheme=http&_hash=1",
 			data:           `metrics0{} 1`,
@@ -113,23 +103,36 @@ func TestProxy_ServeHTTP(t *testing.T) {
 			}))
 			defer targetServer.Close()
 
-			sm := scrape.New()
-			r.NoError(sm.ApplyConfig(&config.Config{
-				ScrapeConfigs: []*config.ScrapeConfig{cs.job},
-			}))
+			p := NewProxy(
+				func(jobName string) *scrape.JobInfo {
+					if cs.job == nil {
+						return nil
+					}
+					return &scrape.JobInfo{
+						Config: cs.job,
+						Cli:    http.DefaultClient,
+					}
+				},
+				func() map[uint64]*target.ScrapeStatus {
+					return cs.status
+				},
+				logrus.New())
 
-			p := NewProxy(sm, logrus.New())
-			r.NoError(p.UpdateTargets(cs.target))
 			req := httptest.NewRequest(http.MethodGet, targetServer.URL+cs.uri, strings.NewReader(""))
 			w := httptest.NewRecorder()
 			p.ServeHTTP(w, req)
 
 			result := w.Result()
 			r.Equal(cs.wantStatusCode, result.StatusCode)
-			r.Equal(len(cs.wantTargetStatus), len(p.targets))
+			if cs.data != `` {
+				d, err := ioutil.ReadAll(result.Body)
+				r.NoError(err)
+				r.Equal(string(d), cs.data)
+			}
+
 			if len(cs.wantTargetStatus) != 0 {
-				r.Equal(cs.wantTargetStatus[1].Series, p.targets[1].Series)
-				r.Equal(cs.wantTargetStatus[1].Health, p.targets[1].Health)
+				r.Equal(cs.wantTargetStatus[1].Series, cs.status[1].Series)
+				r.Equal(cs.wantTargetStatus[1].Health, cs.status[1].Health)
 			}
 		})
 	}

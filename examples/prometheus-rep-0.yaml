@@ -27,7 +27,7 @@ metadata:
 spec:
   # must set as Parallel
   podManagementPolicy: Parallel
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 10
   selector:
     matchLabels:
@@ -72,11 +72,6 @@ spec:
             - sidecar
           image: tkestack/kvass:latest
           imagePullPolicy: Always
-          resources:
-            limits:
-              memory: 256Mi
-            requests:
-              memory: 64Mi
           volumeMounts:
             - mountPath: /etc/prometheus/config_out
               name: config-out
@@ -84,7 +79,11 @@ spec:
             - containerPort: 8080
               name: web
               protocol: TCP
-
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
         - name: prometheus
           args:
             - --storage.tsdb.path=/prometheus
@@ -94,6 +93,7 @@ spec:
             - --storage.tsdb.max-block-duration=2h
             - --storage.tsdb.min-block-duration=2h
             - --config.file=/etc/prometheus/config_out/prometheus_injected.yaml
+            - --log.level=debug
           image: prom/prometheus:v2.19.2
           ports:
             - containerPort: 9090
@@ -123,6 +123,19 @@ spec:
           name: config-out
         - emptyDir: {}
           name: tls-assets
+  volumeClaimTemplates:
+    - metadata:
+        labels:
+          k8s-app: prometheus
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+        storageClassName: cbs
+        volumeMode: Filesystem
   updateStrategy:
     rollingUpdate:
       partition: 0
