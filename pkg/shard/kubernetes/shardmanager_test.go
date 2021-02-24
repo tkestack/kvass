@@ -122,18 +122,18 @@ func testScaleUp(t *testing.T) {
 	r.Equal(int32(10), *s.Spec.Replicas)
 }
 
-func testScaleDown(t *testing.T, deleteVpc bool) {
+func testScaleDown(t *testing.T, deletePvc bool) {
 	r := require.New(t)
 	cli := fake.NewSimpleClientset()
 	createStatefulSet(t, cli, "rep1", 2)
-	sts := New(cli, "default", "k8s-app=prometheus", 8080, deleteVpc, logrus.New())
+	sts := New(cli, "default", "k8s-app=prometheus", 8080, deletePvc, logrus.New())
 	r.NoError(sts.ChangeScale(1))
 	s, err := cli.AppsV1().StatefulSets("default").Get(context.TODO(), "rep1", v12.GetOptions{})
 	r.NoError(err)
 	r.Equal(int32(1), *s.Spec.Replicas)
 	pvc, err := cli.CoreV1().PersistentVolumeClaims("default").List(context.TODO(), v12.ListOptions{})
 	r.NoError(err)
-	if deleteVpc {
+	if deletePvc {
 		r.Equal(1, len(pvc.Items))
 	} else {
 		r.Equal(2, len(pvc.Items))
