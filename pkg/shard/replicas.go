@@ -41,21 +41,41 @@ type Replicas struct {
 	scraping map[uint64]bool
 	url      string
 	log      logrus.FieldLogger
+
+	// rescan is a flag for deciding whether update the scraping
+	rescan   bool
+	// checkIdx is for checking target status periodically
+	checkIdx int
 }
 
 // NewReplicas create a Replicas with empty scraping cache
 func NewReplicas(id string, url string, log logrus.FieldLogger) *Replicas {
 	return &Replicas{
-		ID:      id,
-		APIGet:  api.Get,
-		APIPost: api.Post,
-		url:     url,
-		log:     log,
+		ID:       id,
+		APIGet:   api.Get,
+		APIPost:  api.Post,
+		url:      url,
+		log:      log,
+		rescan:   false,
+		checkIdx: 1,
 	}
 }
 
 func (r *Replicas) targetsScraping() (map[uint64]bool, error) {
-	if r.scraping == nil {
+	checkOk := true
+	if r.checkIdx % 10 == 0 {
+		checkOk = r.checkStatus()
+		if !checkOk {
+			r.log.Error("Check target status error.")
+		}
+		r.checkIdx = 1
+	}
+	r.checkIdx++
+
+	if r.scraping == nil || r.rescan || !checkOk {
+		if r.rescan {
+			r.log.Infof("Rescan targets status for replica %s.", r.ID)
+		}
 		res, err := r.targetStatus()
 		if err != nil {
 			return nil, err
@@ -65,8 +85,28 @@ func (r *Replicas) targetsScraping() (map[uint64]bool, error) {
 			c[k] = true
 		}
 		r.scraping = c
+		r.rescan = false
 	}
 	return r.scraping, nil
+}
+
+func (r *Replicas) checkStatus() bool {
+	res, err := r.targetStatus()
+	if err != nil {
+		r.log.Error(err)
+		return false
+	}
+	if len(res) == len(r.scraping) {
+		for k := range res {
+			// The targets status cached by coordinator was different
+			// from that kept by sidecar
+			if _, ok := r.scraping[k]; !ok {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 func (r *Replicas) runtimeInfo() (*RuntimeInfo, error) {
@@ -83,6 +123,9 @@ func (r *Replicas) runtimeInfo() (*RuntimeInfo, error) {
 		time.Sleep(time.Millisecond * 500)
 	}
 	if err != nil {
+		// While failed to get runtimeinfo, maybe there something wrong with the sidecar,
+		// Need to update the target status
+		r.rescan = true
 		return nil, fmt.Errorf("get runtime info from %s failed : %s", r.ID, err.Error())
 	}
 
@@ -100,10 +143,10 @@ func (r *Replicas) targetStatus() (map[uint64]*target.ScrapeStatus, error) {
 			break
 		}
 	}
+
 	if err != nil {
 		return nil, fmt.Errorf("get targets status info from %s failed : %s", r.ID, err.Error())
 	}
-
 	return res, nil
 }
 
@@ -125,6 +168,7 @@ func (r *Replicas) updateTarget(request *UpdateTargetsRequest) error {
 				break
 			}
 		}
+		r.log.Infof("Update %s target done.", r.ID)
 		if err != nil {
 			return err
 		}
