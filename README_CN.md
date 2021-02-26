@@ -13,10 +13,10 @@ Coordinator 用于服务发现，target调度和分片扩缩容管理.
 # 目录
    * [概述](#概述)
    * [设计](#设计)
-         * [核心架构](#核心架构)
+        * [核心架构](#核心架构)
       * [组件](#组件)
-         * [Coordinator](#coordinator)
-         * [Sidecar](#sidecar)
+        * [Coordinator](#coordinator)
+        * [Sidecar](#sidecar)
       * [Kvass + Thanos](#kvass--thanos)
       * [Kvass + 远程存储](#kvass--远程存储)
       * [多副本](#多副本)
