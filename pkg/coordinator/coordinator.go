@@ -32,23 +32,24 @@ import (
 // Coordinator periodically re balance all replicates
 type Coordinator struct {
 	log                    logrus.FieldLogger
-	shardManager           shard.Manager
+	reManager              shard.ReplicasManager
 	maxSeries              int64
 	maxShard               int32
+	minShard               int32
 	maxIdleTime            time.Duration
 	period                 time.Duration
 	lastGlobalScrapeStatus map[uint64]*target.ScrapeStatus
-
-	getConfigMd5     func() string
-	getExploreResult func(hash uint64) *target.ScrapeStatus
-	getActive        func() map[uint64]*discovery.SDTargets
+	getConfigMd5           func() string
+	getExploreResult       func(hash uint64) *target.ScrapeStatus
+	getActive              func() map[uint64]*discovery.SDTargets
 }
 
 // NewCoordinator create a new coordinator service
 func NewCoordinator(
-	shardManager shard.Manager,
+	reManager shard.ReplicasManager,
 	maxSeries int64,
 	maxShard int32,
+	minShard int32,
 	maxIdleTime time.Duration,
 	period time.Duration,
 	getConfigMd5 func() string,
@@ -56,11 +57,12 @@ func NewCoordinator(
 	getActive func() map[uint64]*discovery.SDTargets,
 	log logrus.FieldLogger) *Coordinator {
 	return &Coordinator{
-		shardManager:     shardManager,
+		reManager:        reManager,
 		getConfigMd5:     getConfigMd5,
 		getExploreResult: getExploreResult,
 		getActive:        getActive,
 		maxShard:         maxShard,
+		minShard:         minShard,
 		maxSeries:        maxSeries,
 		maxIdleTime:      maxIdleTime,
 		log:              log,
@@ -81,31 +83,63 @@ func (c *Coordinator) LastGlobalScrapeStatus() map[uint64]*target.ScrapeStatus {
 // runOnce get shards information from shard manager,
 // do shard reBalance and change expect shard number
 func (c *Coordinator) runOnce() error {
-	shards, err := c.shardManager.Shards()
+	replicas, err := c.reManager.Replicas()
 	if err != nil {
-		return errors.Wrapf(err, "Shards")
+		return errors.Wrapf(err, "get replicas")
 	}
 
-	var (
-		active           = c.getActive()
-		shardsInfo       = getShardInfos(shards, c.getConfigMd5(), c.log)
-		changeAbleShards = changeAbleShardsInfo(shardsInfo)
-	)
+	newLastGlobalScrapeStatus := map[uint64]*target.ScrapeStatus{}
+	for _, repItem := range replicas {
+		shards, err := repItem.Shards()
+		if err != nil {
+			c.log.Error(err.Error())
+			continue
+		}
 
-	c.lastGlobalScrapeStatus = globalScrapeStatus(active, shardsInfo, c.getExploreResult)
-	gcTargets(changeAbleShards, active, c.log)
-	needSpace := alleviateShards(changeAbleShards, c.maxSeries, c.log)
-	needSpace += assignNoScrapingTargets(shardsInfo, active, c.maxSeries, c.lastGlobalScrapeStatus)
+		var (
+			active           = c.getActive()
+			shardsInfo       = c.getShardInfos(shards)
+			changeAbleShards = changeAbleShardsInfo(shardsInfo)
+		)
 
-	scale := int32(len(shardsInfo))
-	if needSpace != 0 {
-		c.log.Infof("need space %d", needSpace)
-		scale = tryScaleUp(shardsInfo, needSpace, c.maxSeries, c.maxShard)
-	} else if c.maxIdleTime != 0 {
-		scale = tryScaleDown(shardsInfo, c.maxSeries, c.maxIdleTime, c.log)
+		if int32(len(changeAbleShards)) < c.minShard { // insure that scaling up to min shard
+			if err := repItem.ChangeScale(c.minShard); err != nil {
+				c.log.Error(err.Error())
+				continue
+			}
+		}
+
+		lastGlobalScrapeStatus := c.globalScrapeStatus(active, shardsInfo)
+		c.gcTargets(changeAbleShards, active)
+		needSpace := c.alleviateShards(changeAbleShards)
+		needSpace += c.assignNoScrapingTargets(shardsInfo, active, lastGlobalScrapeStatus)
+
+		scale := int32(len(shardsInfo))
+		if needSpace != 0 {
+			c.log.Infof("need space %d", needSpace)
+			scale = c.tryScaleUp(shardsInfo, needSpace)
+		} else if c.maxIdleTime != 0 {
+			scale = c.tryScaleDown(shardsInfo)
+		}
+
+		if scale > c.maxShard {
+			scale = c.maxShard
+		}
+
+		if scale < c.minShard {
+			scale = c.minShard
+		}
+
+		updateScrapingTargets(shardsInfo, active)
+		c.applyShardsInfo(shardsInfo)
+		if err := repItem.ChangeScale(scale); err != nil {
+			c.log.Error(err.Error())
+			continue
+		}
+
+		newLastGlobalScrapeStatus = mergeScrapeStatus(newLastGlobalScrapeStatus, lastGlobalScrapeStatus)
 	}
 
-	updateScrapingTargets(shardsInfo, active)
-	applyShardsInfo(shardsInfo, c.log)
-	return c.shardManager.ChangeScale(scale)
+	c.lastGlobalScrapeStatus = newLastGlobalScrapeStatus
+	return nil
 }

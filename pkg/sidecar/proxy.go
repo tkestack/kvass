@@ -87,7 +87,6 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if scrapErr != nil {
-			p.log.Error(scrapErr.Error())
 			w.WriteHeader(http.StatusBadRequest)
 		}
 	}()

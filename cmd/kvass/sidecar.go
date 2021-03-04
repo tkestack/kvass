@@ -26,10 +26,9 @@ import (
 	"github.com/prometheus/prometheus/config"
 	"tkestack.io/kvass/pkg/prom"
 
-	"golang.org/x/sync/errgroup"
-
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 )
 
 var sidecarCfg = struct {
@@ -134,6 +133,7 @@ func configInjectSidecar(cfg *config.Config, option *configInjectOption) error {
 	if option == nil {
 		return nil
 	}
+
 	for _, job := range cfg.ScrapeConfigs {
 		if option.kubernetes.serviceAccountPath != "" {
 			if job.HTTPClientConfig.TLSConfig.CAFile == "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" {

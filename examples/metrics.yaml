@@ -13,9 +13,6 @@ spec:
       app.kubernetes.io/name: metrics
   template:
     metadata:
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "9091"
       labels:
         app.kubernetes.io/name: metrics
     spec:
@@ -28,7 +25,7 @@ spec:
             - -label-len=20
           command:
             - /metrics
-          image: tkestack/metrics-gen:latest
+          image: ccr.ccs.tencentyun.com/ccr_dev/metrics:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 9091

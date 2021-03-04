@@ -19,14 +19,14 @@ package shard
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"tkestack.io/kvass/pkg/api"
 	"tkestack.io/kvass/pkg/target"
 )
 
-// Replicas is a replicas of one shard
-// all replicas of one shard scrape same targets and expected to have same load
-type Replicas struct {
+// Shard is a prometheus shard
+type Shard struct {
 	// ID is the unique ID for differentiate different replicate of shard
 	ID string
 	// APIGet is a function to do stand api request to target
@@ -39,36 +39,41 @@ type Replicas struct {
 	scraping map[uint64]*target.ScrapeStatus
 	url      string
 	log      logrus.FieldLogger
+	// Ready indicate this shard is ready
+	Ready bool
 }
 
-// NewReplicas create a Replicas with empty scraping cache
-func NewReplicas(id string, url string, log logrus.FieldLogger) *Replicas {
-	return &Replicas{
+// NewShard create a Shard with empty scraping cache
+func NewShard(id string, url string, ready bool, log logrus.FieldLogger) *Shard {
+	return &Shard{
 		ID:      id,
 		APIGet:  api.Get,
 		APIPost: api.Post,
 		url:     url,
 		log:     log,
+		Ready:   ready,
 	}
 }
 
-func (r *Replicas) runtimeInfo() (*RuntimeInfo, error) {
+// RuntimeInfo return the runtime status of this shard
+func (r *Shard) RuntimeInfo() (*RuntimeInfo, error) {
 	res := &RuntimeInfo{}
-
 	err := r.APIGet(r.url+"/api/v1/shard/runtimeinfo/", &res)
 	if err != nil {
-		return nil, fmt.Errorf("get runtime info from %s failed : %s", r.ID, err.Error())
+		return res, fmt.Errorf("get runtime info from %s failed : %s", r.ID, err.Error())
 	}
 
 	return res, nil
 }
 
-func (r *Replicas) targetStatus() (map[uint64]*target.ScrapeStatus, error) {
+// TargetStatus return the target runtime status that Group scraping
+// cached result will be send if something wrong
+func (r *Shard) TargetStatus() (map[uint64]*target.ScrapeStatus, error) {
 	res := map[uint64]*target.ScrapeStatus{}
 
 	err := r.APIGet(r.url+"/api/v1/shard/targets/", &res)
 	if err != nil {
-		return nil, fmt.Errorf("get targets status info from %s failed : %s", r.ID, err.Error())
+		return res, errors.Wrapf(err, "get targets status info from %s failed, url = %s", r.ID, r.url)
 	}
 
 	//must copy
@@ -82,9 +87,9 @@ func (r *Replicas) targetStatus() (map[uint64]*target.ScrapeStatus, error) {
 	return res, nil
 }
 
-// updateTarget try apply targets to sidecar
+// UpdateTarget try apply targets to sidecar
 // request will be skipped if nothing changed according to r.scraping
-func (r *Replicas) updateTarget(request *UpdateTargetsRequest) error {
+func (r *Shard) UpdateTarget(request *UpdateTargetsRequest) error {
 	newTargets := map[uint64]*target.Target{}
 	for _, ts := range request.Targets {
 		for _, t := range ts {
@@ -102,7 +107,7 @@ func (r *Replicas) updateTarget(request *UpdateTargetsRequest) error {
 	return nil
 }
 
-func (r *Replicas) needUpdate(targets map[uint64]*target.Target) bool {
+func (r *Shard) needUpdate(targets map[uint64]*target.Target) bool {
 	if len(targets) != len(r.scraping) {
 		return true
 	}

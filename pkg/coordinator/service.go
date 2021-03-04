@@ -19,6 +19,7 @@ package coordinator
 
 import (
 	"sort"
+	"tkestack.io/kvass/pkg/shard"
 
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
@@ -61,6 +62,8 @@ func NewService(
 	pprof.Register(w.Engine)
 
 	w.GET("/api/v1/targets", api.Wrap(lg, w.targets))
+	w.GET("/api/v1/shard/runtimeinfo", api.Wrap(lg, w.runtimeInfo))
+
 	w.POST("/-/reload", api.Wrap(lg, func(ctx *gin.Context) *api.Result {
 		if err := w.cfgManager.Reload(); err != nil {
 			return api.BadDataErr(err, "reload failed")
@@ -71,6 +74,19 @@ func NewService(
 		return api.Data(gin.H{"yaml": string(cfgManager.ConfigInfo().RawContent)})
 	}))
 	return w
+}
+
+// runtimeInfo return statistics runtimeInfo of all shards
+func (s *Service) runtimeInfo(ctx *gin.Context) *api.Result {
+	series := int64(0)
+	for _, st := range s.getScrapeStatus() {
+		series += st.Series
+	}
+
+	return api.Data(&shard.RuntimeInfo{
+		ConfigMD5:  s.cfgManager.ConfigInfo().Md5,
+		HeadSeries: series,
+	})
 }
 
 // targets compatible of prometheus Service /api/v1/targets

@@ -27,23 +27,15 @@ import (
 	"tkestack.io/kvass/pkg/utils/test"
 )
 
-func newTestingGroup(t *testing.T) (*Group, *Replicas, *require.Assertions) {
+func newTestingShard(t *testing.T) (*Shard, *require.Assertions) {
 	lg := logrus.New()
-	s := NewGroup("0", lg)
-	rep := NewReplicas("r0", "", lg)
-	s.AddReplicas(rep)
-	return s, rep, require.New(t)
+	s := NewShard("0", "", true, lg)
+	return s, require.New(t)
 }
 
-func TestGroup_Replicas(t *testing.T) {
-	s, rep, r := newTestingGroup(t)
-	r.Equal(rep.ID, s.Replicas()[0].ID)
-	r.Equal(1, len(s.Replicas()))
-}
-
-func TestGroup_RuntimeInfo(t *testing.T) {
-	s, rep, r := newTestingGroup(t)
-	rep.APIGet = func(url string, ret interface{}) error {
+func TestShard_RuntimeInfo(t *testing.T) {
+	s, r := newTestingShard(t)
+	s.APIGet = func(url string, ret interface{}) error {
 		return test.CopyJSON(ret, &RuntimeInfo{
 			HeadSeries: 10,
 		})
@@ -54,8 +46,8 @@ func TestGroup_RuntimeInfo(t *testing.T) {
 	r.Equal(int64(10), res.HeadSeries)
 }
 
-func TestGroup_TargetStatus(t *testing.T) {
-	s, rep, r := newTestingGroup(t)
+func TestShard_TargetStatus(t *testing.T) {
+	s, r := newTestingShard(t)
 	st := &target.ScrapeStatus{
 		LastError:          "test",
 		LastScrape:         time.Time{},
@@ -63,7 +55,7 @@ func TestGroup_TargetStatus(t *testing.T) {
 		Health:             scrape.HealthBad,
 		Series:             100,
 	}
-	rep.APIGet = func(url string, ret interface{}) error {
+	s.APIGet = func(url string, ret interface{}) error {
 		return test.CopyJSON(ret, map[uint64]*target.ScrapeStatus{
 			1: st,
 		})
@@ -74,7 +66,7 @@ func TestGroup_TargetStatus(t *testing.T) {
 	r.JSONEq(test.MustJSON(st), test.MustJSON(ret[1]))
 }
 
-func TestGroup_UpdateTarget(t *testing.T) {
+func TestShard_UpdateTarget(t *testing.T) {
 	var cases = []struct {
 		name        string
 		curScraping map[uint64]*target.ScrapeStatus
@@ -132,9 +124,9 @@ func TestGroup_UpdateTarget(t *testing.T) {
 
 	for _, cs := range cases {
 		t.Run(cs.name, func(t *testing.T) {
-			s, rep, r := newTestingGroup(t)
-			rep.scraping = cs.curScraping
-			rep.APIPost = func(url string, req interface{}, ret interface{}) (err error) {
+			s, r := newTestingShard(t)
+			s.scraping = cs.curScraping
+			s.APIPost = func(url string, req interface{}, ret interface{}) (err error) {
 				r.True(cs.wantUpdate)
 				return nil
 			}
