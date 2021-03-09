@@ -200,7 +200,7 @@ func TestCoordinator_RunOnce(t *testing.T) {
 					{
 						rtInfo: &shard.RuntimeInfo{
 							HeadSeries: 1,
-							ConfigMD5:  "invalid",
+							ConfigHash: "invalid",
 						},
 						wantTargets: shard.UpdateTargetsRequest{
 							// shard not changeable , don't assign

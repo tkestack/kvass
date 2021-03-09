@@ -137,7 +137,7 @@ distribution targets to shards`,
 				cdCfg.shardMaxIdleTime,
 				cdCfg.syncInterval,
 				func() string {
-					return cfgManager.ConfigInfo().Md5
+					return cfgManager.ConfigInfo().ConfigHash
 				},
 				exp.Get,
 				targetDiscovery.ActiveTargetsByHash,

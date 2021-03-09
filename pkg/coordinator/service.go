@@ -84,7 +84,7 @@ func (s *Service) runtimeInfo(ctx *gin.Context) *api.Result {
 	}
 
 	return api.Data(&shard.RuntimeInfo{
-		ConfigMD5:  s.cfgManager.ConfigInfo().Md5,
+		ConfigHash: s.cfgManager.ConfigInfo().ConfigHash,
 		HeadSeries: series,
 	})
 }

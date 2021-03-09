@@ -110,8 +110,8 @@ func (c *Coordinator) getShardInfos(shards []*shard.Shard) []*shardInfo {
 				c.log.Error(err.Error())
 				si.changeAble = false
 			} else {
-				if si.runtime.ConfigMD5 != c.getConfigMd5() {
-					c.log.Warnf("config of %s is not up to date, expect md5 = %s, shard md5 = %s", si.shard.ID, c.getConfigMd5(), si.runtime.ConfigMD5)
+				if si.runtime.ConfigHash != c.getConfigMd5() {
+					c.log.Warnf("config of %s is not up to date, expect md5 = %s, shard md5 = %s", si.shard.ID, c.getConfigMd5(), si.runtime.ConfigHash)
 					si.changeAble = false
 				}
 			}

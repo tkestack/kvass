@@ -114,7 +114,7 @@ func (s *Service) runtimeInfo(g *gin.Context) *api.Result {
 	}
 	return api.Data(&shard.RuntimeInfo{
 		HeadSeries:  r.TimeSeriesCount,
-		ConfigMD5:   s.cfgManager.ConfigInfo().Md5,
+		ConfigHash:  s.cfgManager.ConfigInfo().ConfigHash,
 		IdleStartAt: targets.IdleAt,
 	})
 }

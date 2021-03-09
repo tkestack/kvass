@@ -57,7 +57,7 @@ func TestExplore_Run(t *testing.T) {
 	sm := scrape.New()
 	r.NoError(sm.ApplyConfig(&prom.ConfigInfo{
 		RawContent: nil,
-		Md5:        "",
+		ConfigHash: "",
 		Config: &config.Config{
 			ScrapeConfigs: []*config.ScrapeConfig{
 				{

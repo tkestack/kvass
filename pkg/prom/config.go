@@ -18,19 +18,21 @@
 package prom
 
 import (
+	"fmt"
+	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pkg/errors"
 	"github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
-	"tkestack.io/kvass/pkg/utils/encode"
 )
 
 // ConfigInfo include all information of current config
 type ConfigInfo struct {
 	// RawContent is the content of config file
 	RawContent []byte
-	// Md5 is a md5 of config file content
-	Md5 string
+	// ConfigHash is a md5 of config file content
+	ConfigHash string
 	// Config is the marshaled prometheus config
 	Config *config.Config
 }
@@ -82,7 +84,16 @@ func (c *ConfigManager) updateConfigInfo() (err error) {
 		return errors.Wrapf(err, "marshal config")
 	}
 
-	info.Md5 = encode.Md5(info.RawContent)
+	// config hash don't include external labels
+	eLb := info.Config.GlobalConfig.ExternalLabels
+	info.Config.GlobalConfig.ExternalLabels = []labels.Label{}
+	hash, err := hashstructure.Hash(info.Config, hashstructure.FormatV2, nil)
+	if err != nil {
+		return errors.Wrapf(err, "get config hash")
+	}
+
+	info.ConfigHash = fmt.Sprint(hash)
+	info.Config.GlobalConfig.ExternalLabels = eLb
 	c.currentConfig = info
 	return nil
 }

@@ -40,8 +40,8 @@ type Manager interface {
 type RuntimeInfo struct {
 	// HeadSeries return current head_series of prometheus
 	HeadSeries int64 `json:"headSeries"`
-	// ConfigMD5 is the md5 of current config file
-	ConfigMD5 string `json:"ConfigMD5"`
+	// ConfigHash is the md5 of current config file
+	ConfigHash string `json:"ConfigHash"`
 	// IdleStartAt is the time that shard begin idle
 	IdleStartAt *time.Time `json:"IdleStartAt,omitempty"`
 }

@@ -30,6 +30,8 @@ func TestConfigManager(t *testing.T) {
 	data := `global:
   evaluation_interval: 10s
   scrape_interval: 15s
+  external_labels:
+    replica: pod1
 scrape_configs:
 - job_name: "test"
   static_configs:
@@ -42,7 +44,7 @@ scrape_configs:
 	m.AddReloadCallbacks(func(c *ConfigInfo) error {
 		updated = true
 		r.Equal(string(c.RawContent), data)
-		r.Equal("16df7021e4e47ab8f3052c1451487029", c.Md5)
+		r.Equal("16887931695534343218", c.ConfigHash)
 		r.Equal(1, len(c.Config.ScrapeConfigs))
 		return nil
 	})

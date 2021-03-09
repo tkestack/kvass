@@ -128,7 +128,7 @@ scrape_configs:
     - 127.0.0.1:9091`,
 			wantAPIResult: api.Data(&shard.RuntimeInfo{
 				HeadSeries:  10,
-				ConfigMD5:   "16df7021e4e47ab8f3052c1451487029",
+				ConfigHash:  "16887931695534343218",
 				IdleStartAt: nil,
 			}),
 		},
@@ -157,7 +157,7 @@ scrape_configs:
     - 127.0.0.1:9091`,
 			wantAPIResult: api.Data(&shard.RuntimeInfo{
 				HeadSeries:  100,
-				ConfigMD5:   "16df7021e4e47ab8f3052c1451487029",
+				ConfigHash:  "16887931695534343218",
 				IdleStartAt: nil,
 			}),
 		},
