@@ -18,7 +18,10 @@
 package main
 
 import (
+	"context"
+	"os"
 	"path"
+	"time"
 	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/sidecar"
 	"tkestack.io/kvass/pkg/target"
@@ -106,11 +109,22 @@ var sidecarCmd = &cobra.Command{
 			log.WithField("component", "web"),
 		)
 
-		if err := configManager.Reload(); err != nil {
-			panic(err)
-		}
-		lg.Infof("load config done")
+		for {
+			select {
+			case <-context.Background().Done():
+				os.Exit(1)
+			default:
+			}
 
+			if err := configManager.Reload(); err != nil {
+				log.Infof(err.Error())
+				time.Sleep(time.Second)
+			} else {
+				break
+			}
+		}
+
+		lg.Infof("load config done")
 		if err := targetManager.Load(); err != nil {
 			panic(err)
 		}
