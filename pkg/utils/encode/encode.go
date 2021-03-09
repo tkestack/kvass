@@ -22,7 +22,7 @@ import (
 	"github.com/gobuffalo/packr/v2/file/resolver/encoding/hex"
 )
 
-// ConfigHash return the md5 code of bytes
+// Md5 return the md5 code of bytes
 func Md5(b []byte) string {
 	h := md5.New()
 	h.Write(b)
