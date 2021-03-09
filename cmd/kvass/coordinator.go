@@ -132,8 +132,8 @@ distribution targets to shards`,
 			cd = coordinator.NewCoordinator(
 				gm,
 				cdCfg.shardMaxSeries,
-				cdCfg.shardMinShard,
 				cdCfg.shardMaxShard,
+				cdCfg.shardMinShard,
 				cdCfg.shardMaxIdleTime,
 				cdCfg.syncInterval,
 				func() string {
