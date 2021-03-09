@@ -2,7 +2,8 @@ PROJECT_NAME := "tkestack.io/kvass"
 PKG := "./"
 PKG_LIST := $(shell go list ${PKG}/... | grep -v /vendor/)
 GO_FILES := $(shell find . -name '*.go' | grep -v /vendor/ | grep -v _test.go)
-
+GOOS := "linux"
+GOARCH := "amd64"
 .PHONY: all dep lint vet test test-coverage build clean
 
 all: build
@@ -24,7 +25,7 @@ test-coverage: ## Run tests with coverage
 	@cat cover.out >> coverage.txt
 
 build: dep ## Build the binary file
-	@go build -i -o kvass cmd/kvass/*.go
+	@GOOS=${GOOS} GOARCH=${GOARCH} go build -i -o kvass cmd/kvass/*.go
 
 clean: ## Remove previous build
 	@rm -fr kvass
