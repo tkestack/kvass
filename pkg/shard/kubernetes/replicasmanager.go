@@ -27,6 +27,7 @@ import (
 	"tkestack.io/kvass/pkg/shard"
 )
 
+// ReplicasManager select Statefusets to get shard manager
 type ReplicasManager struct {
 	port            int
 	deletePVC       bool
@@ -35,6 +36,7 @@ type ReplicasManager struct {
 	getStatefulSets func() (list *v1.StatefulSetList, e error)
 }
 
+// NewReplicasManager create a ReplicasManager
 func NewReplicasManager(
 	cli kubernetes.Interface,
 	stsNamespace string,
@@ -56,6 +58,7 @@ func NewReplicasManager(
 	}
 }
 
+// Replicas return all shards manager
 func (g *ReplicasManager) Replicas() ([]shard.Manager, error) {
 	sts, err := g.getStatefulSets()
 	if err != nil {

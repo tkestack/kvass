@@ -25,15 +25,6 @@ import (
 	"tkestack.io/kvass/pkg/utils/encode"
 )
 
-type ConfigInjectOption struct {
-	Kubernetes struct {
-		URL                string
-		ServiceAccountPath string
-		Proxy              string
-	}
-	ExternalLabels string
-}
-
 // ConfigInfo include all information of current config
 type ConfigInfo struct {
 	// RawContent is the content of config file
