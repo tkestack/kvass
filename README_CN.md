@@ -23,6 +23,8 @@ Coordinator 用于服务发现，target调度和分片扩缩容管理.
       * [Target迁移原理](#Target迁移原理)
       * [分片降压](#分片降压)
       * [分片缩容](#分片缩容)
+      * [限制分片数目](#限制分片数目)
+      * [Target调度策略](#Target调度策略)
    * [Demo体验](#Demo体验)
    * [最佳实践](#最佳实践)
          * [启动参数推荐](#启动参数推荐)
@@ -85,7 +87,7 @@ Kvass 是一个 [Prometheus](https://github.com/prometheus/prometheus) 横向扩
 
 ## 多副本
 
-Coordinator 使用 label 选择器来选择分片的StatefulSets, 每一个StatefulSet被认为是一个副本, Kvass将标号相同的不同.StatefulSet的Pod进行编组，同组的Prometheus将被分配相同的target，并预期有相同的负载。
+Coordinator 使用 label 选择器来选择分片的StatefulSets, 每一个StatefulSet被认为是一个副本, 副本之间的target分配与调度是独立的。
 
 > --shard.selector=app.kubernetes.io/name=prometheus
 
@@ -116,15 +118,31 @@ Coordinator 使用 label 选择器来选择分片的StatefulSets, 每一个State
 您可以通过Coordinaor的以下参数来设置闲置时间，当设置为0时关闭缩容。
 
 > ```
-> - --shard.max-idle-time=3h 
-> - --shard.max-idle-time=0 // 默认
+> --shard.max-idle-time=3h 
+> --shard.max-idle-time=0 // 默认
 > ```
 
 如果使用的是Statefulset来管理分片，您可以添加一下参数来让Coordinator在删除分片时自动删除pvc
 
 > ```
-> - --shard.delete-pvc=true // 默认
+> --shard.delete-pvc=true // 默认
 > ```
+
+
+## 限制分片数目
+可通过设置以下参数来限制Coordinator的最大最小分片数。
+值得注意的是，如果设置了最小分片数，那么只有可用分片数不低于最小分片数才会开始Coordinate。
+
+> ``` 
+> --shard.max-shard=99999 //默认
+> --shard.min-shard=0 //默认
+> ```
+
+## Target调度策略
+
+如果开启了缩容，那么无论是新的Target还是被迁移的Target，都会优先被分配给编号低的分片。
+
+如果关闭了缩容，则会随机分配到有空间的分片上，这种方式特别适合和```--shard.min-shard```参数一起使用。
 
 # 安装Demo
 
@@ -174,9 +192,9 @@ Prometheus的内存使用量和head series有关。
 
 > 设置Coordinator启动参数
 >
-> --shard.max-series=750000
+> --shard.max-series=600000
 
-每个Prometheus的内存request建议设置为8G.
+每个Prometheus的内存request建议设置为2C8G.
 
 # License
 

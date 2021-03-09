@@ -22,10 +22,16 @@ import (
 	"tkestack.io/kvass/pkg/target"
 )
 
+// ReplicasManager known all shard managers
+type ReplicasManager interface {
+	// Replicas return all replicas
+	Replicas() ([]Manager, error)
+}
+
 // Manager known how to create or delete Shards
 type Manager interface {
 	// Shards return current Shards in the cluster
-	Shards() ([]*Group, error)
+	Shards() ([]*Shard, error)
 	// ChangeScale create or delete Shards according to "expReplicate"
 	ChangeScale(expReplicate int32) error
 }
@@ -37,7 +43,7 @@ type RuntimeInfo struct {
 	// ConfigMD5 is the md5 of current config file
 	ConfigMD5 string `json:"ConfigMD5"`
 	// IdleStartAt is the time that shard begin idle
-	IdleStartAt *time.Time
+	IdleStartAt *time.Time `json:"IdleStartAt,omitempty"`
 }
 
 // UpdateTargetsRequest contains all information about the targets updating request

@@ -19,8 +19,8 @@ package coordinator
 
 import (
 	"github.com/prometheus/prometheus/scrape"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+	"math/rand"
 	"time"
 	"tkestack.io/kvass/pkg/discovery"
 	"tkestack.io/kvass/pkg/shard"
@@ -33,13 +33,13 @@ const (
 
 type shardInfo struct {
 	changeAble bool
-	shard      *shard.Group
+	shard      *shard.Shard
 	runtime    *shard.RuntimeInfo
 	scraping   map[uint64]*target.ScrapeStatus
 	newTargets map[string][]*target.Target
 }
 
-func newShardInfo(shard *shard.Group) *shardInfo {
+func newShardInfo(shard *shard.Shard) *shardInfo {
 	return &shardInfo{
 		changeAble: true,
 		shard:      shard,
@@ -85,7 +85,7 @@ func updateScrapingTargets(shards []*shardInfo, active map[uint64]*discovery.SDT
 	}
 }
 
-func getShardInfos(shards []*shard.Group, cfgMd5 string, lg logrus.FieldLogger) []*shardInfo {
+func (c *Coordinator) getShardInfos(shards []*shard.Shard) []*shardInfo {
 	all := make([]*shardInfo, len(shards))
 	g := errgroup.Group{}
 	for index, tmp := range shards {
@@ -93,24 +93,29 @@ func getShardInfos(shards []*shard.Group, cfgMd5 string, lg logrus.FieldLogger) 
 		i := index
 		g.Go(func() (err error) {
 			si := newShardInfo(s)
+			all[i] = si
+			if !s.Ready {
+				c.log.Infof("%s is not ready", s.ID)
+				si.changeAble = false
+				return nil
+			}
 			si.scraping, err = s.TargetStatus()
 			if err != nil {
-				lg.Error(err.Error())
+				c.log.Error(err.Error())
 				si.changeAble = false
 			}
 
 			si.runtime, err = s.RuntimeInfo()
 			if err != nil {
-				lg.Error(err.Error())
+				c.log.Error(err.Error())
 				si.changeAble = false
 			} else {
-				if si.runtime.ConfigMD5 != cfgMd5 {
-					lg.Warnf("config of %s is not up to date", si.shard.ID)
+				if si.runtime.ConfigMD5 != c.getConfigMd5() {
+					c.log.Warnf("config of %s is not up to date, expect md5 = %s, shard md5 = %s", si.shard.ID, c.getConfigMd5(), si.runtime.ConfigMD5)
 					si.changeAble = false
 				}
 			}
 
-			all[i] = si
 			return nil
 		})
 	}
@@ -118,18 +123,18 @@ func getShardInfos(shards []*shard.Group, cfgMd5 string, lg logrus.FieldLogger) 
 	return all
 }
 
-func applyShardsInfo(shards []*shardInfo, log logrus.FieldLogger) {
+func (c *Coordinator) applyShardsInfo(shards []*shardInfo) {
 	g := errgroup.Group{}
 	for _, tmp := range shards {
 		s := tmp
 		if !s.changeAble {
-			log.Warnf("shard group %s is unHealth, skip apply change", s.shard.ID)
+			c.log.Warnf("shard group %s is unHealth, skip apply change", s.shard.ID)
 			continue
 		}
 
 		g.Go(func() (err error) {
 			if err := s.shard.UpdateTarget(&shard.UpdateTargetsRequest{Targets: s.newTargets}); err != nil {
-				log.Error(err.Error())
+				c.log.Error(err.Error())
 				return err
 			}
 			return nil
@@ -142,7 +147,7 @@ func applyShardsInfo(shards []*shardInfo, log logrus.FieldLogger) {
 // 1. not exist in active targets
 // 2. is in_transfer state and had been scraped by other shard
 // 3. is normal state and had been scraped by other shard with lower head series
-func gcTargets(changeAbleShards []*shardInfo, active map[uint64]*discovery.SDTargets, log logrus.FieldLogger) {
+func (c *Coordinator) gcTargets(changeAbleShards []*shardInfo, active map[uint64]*discovery.SDTargets) {
 	for _, s := range changeAbleShards {
 		for h, tar := range s.scraping {
 			// target not exist in active targets
@@ -180,7 +185,7 @@ func gcTargets(changeAbleShards []*shardInfo, active map[uint64]*discovery.SDTar
 // make expect series of targets less than maxSeries * 0.6 if current head series > maxSeries 1.2
 // make expect series of targets less than maxSeries * 0.3 if current head series > maxSeries 1.5
 // remove all targets if current head series > maxSeries 1.8
-func alleviateShards(changeAbleShards []*shardInfo, maxSeries int64, log logrus.FieldLogger) (needSpace int64) {
+func (c *Coordinator) alleviateShards(changeAbleShards []*shardInfo) (needSpace int64) {
 	var threshold = []struct {
 		maxSeriesRate    float64
 		expectSeriesRate float64
@@ -205,8 +210,9 @@ func alleviateShards(changeAbleShards []*shardInfo, maxSeries int64, log logrus.
 
 	for _, s := range changeAbleShards {
 		for _, t := range threshold {
-			if s.runtime.HeadSeries >= seriesWithRate(maxSeries, t.maxSeriesRate) {
-				needSpace += alleviateShard(s, changeAbleShards, maxSeries, seriesWithRate(maxSeries, t.expectSeriesRate), log)
+			if s.runtime.HeadSeries >= seriesWithRate(c.maxSeries, t.maxSeriesRate) {
+				c.log.Infof("%s need alleviate", s.shard.ID)
+				needSpace += c.alleviateShard(s, changeAbleShards, seriesWithRate(c.maxSeries, t.expectSeriesRate))
 				break
 			}
 		}
@@ -215,7 +221,7 @@ func alleviateShards(changeAbleShards []*shardInfo, maxSeries int64, log logrus.
 	return needSpace
 }
 
-func alleviateShard(s *shardInfo, changeAbleShards []*shardInfo, maxSeries int64, expSeries int64, log logrus.FieldLogger) (needSpace int64) {
+func (c *Coordinator) alleviateShard(s *shardInfo, changeAbleShards []*shardInfo, expSeries int64) (needSpace int64) {
 	total := s.totalTargetsSeries()
 	for hash, tar := range s.scraping {
 		if total < expSeries {
@@ -232,8 +238,8 @@ func alleviateShard(s *shardInfo, changeAbleShards []*shardInfo, maxSeries int64
 				continue
 			}
 
-			if os.runtime.HeadSeries+tar.Series < maxSeries {
-				log.Infof("transfer target from %s to %s series = (%d) ", s.shard.ID, os.shard.ID, tar.Series)
+			if os.runtime.HeadSeries+tar.Series < c.maxSeries {
+				c.log.Infof("transfer target from %s to %s series = (%d) ", s.shard.ID, os.shard.ID, tar.Series)
 				transferTarget(s, os, hash)
 				total -= tar.Series
 			}
@@ -259,10 +265,9 @@ func seriesWithRate(series int64, rate float64) int64 {
 }
 
 // assignNoScrapingTargets assign targets that no shard is scraping
-func assignNoScrapingTargets(
+func (c *Coordinator) assignNoScrapingTargets(
 	shards []*shardInfo,
 	active map[uint64]*discovery.SDTargets,
-	maxSeries int64,
 	globalScrapeStatus map[uint64]*target.ScrapeStatus,
 ) (needSpace int64) {
 	healthShards := changeAbleShardsInfo(shards)
@@ -283,7 +288,7 @@ func assignNoScrapingTargets(
 			continue
 		}
 
-		sd := getFreeShard(healthShards, status.Series, maxSeries)
+		sd := c.getFreeShard(healthShards, status.Series)
 		if sd != nil {
 			sd.runtime.HeadSeries += status.Series
 			sd.scraping[hash] = status
@@ -294,19 +299,28 @@ func assignNoScrapingTargets(
 	return needSpace
 }
 
-func getFreeShard(shards []*shardInfo, series int64, maxSeries int64) *shardInfo {
+func (c *Coordinator) getFreeShard(shards []*shardInfo, series int64) *shardInfo {
+	cond := make([]*shardInfo, 0)
+	isRand := c.maxIdleTime == 0
 	for _, s := range shards {
-		if s.changeAble && s.runtime.HeadSeries+series < maxSeries {
-			return s
+		if s.changeAble && s.runtime.HeadSeries+series < c.maxSeries {
+			if !isRand {
+				return s
+			}
+			cond = append(cond, s)
 		}
 	}
-	return nil
+
+	if len(cond) == 0 {
+		return nil
+	}
+
+	return cond[rand.Uint64()%uint64(len(cond))]
 }
 
-func globalScrapeStatus(
+func (c *Coordinator) globalScrapeStatus(
 	active map[uint64]*discovery.SDTargets,
 	shards []*shardInfo,
-	getExploreStatus func(uint64) *target.ScrapeStatus,
 ) map[uint64]*target.ScrapeStatus {
 	ret := map[uint64]*target.ScrapeStatus{}
 l1:
@@ -319,7 +333,7 @@ l1:
 		}
 
 		// try found status from exploring
-		status := getExploreStatus(h)
+		status := c.getExploreResult(h)
 		if status != nil {
 			ret[h] = status
 		} else {
@@ -332,7 +346,7 @@ l1:
 
 // tryScaleDown try transfer targets in tail shard to front and make it idle
 // idle shard may be delete
-func tryScaleDown(shards []*shardInfo, maxSeries int64, maxIdle time.Duration, log logrus.FieldLogger) int32 {
+func (c *Coordinator) tryScaleDown(shards []*shardInfo) int32 {
 	var (
 		scale = int32(len(shards))
 		i     = len(shards) - 1
@@ -341,8 +355,8 @@ func tryScaleDown(shards []*shardInfo, maxSeries int64, maxIdle time.Duration, l
 	// check for scale able shard
 	for ; i >= 0; i-- {
 		s := shards[i]
-		if s.changeAble && s.runtime.IdleStartAt != nil && time.Now().Sub(*s.runtime.IdleStartAt) > maxIdle {
-			log.Infof("%s is remove able", s.shard.ID)
+		if s.changeAble && s.runtime.IdleStartAt != nil && time.Now().Sub(*s.runtime.IdleStartAt) > c.maxIdleTime {
+			c.log.Infof("%s is remove able", s.shard.ID)
 			scale--
 		} else {
 			break
@@ -352,12 +366,12 @@ func tryScaleDown(shards []*shardInfo, maxSeries int64, maxIdle time.Duration, l
 	// try transfer targets from tail shard to head shards
 	for ; i > 0; i-- {
 		from := shards[i]
-		if !shardCanBeIdle(from, shards[0:i], maxSeries) {
+		if !c.shardCanBeIdle(from, shards[0:i]) {
 			return scale
 		}
 
-		log.Infof("try mark transfer all targets from %s", from.shard.ID)
-		if !shardBecomeIdle(from, shards[0:i], maxSeries, log) {
+		c.log.Infof("try mark transfer all targets from %s", from.shard.ID)
+		if !c.shardBecomeIdle(from, shards[0:i]) {
 			return scale
 		}
 	}
@@ -366,7 +380,7 @@ func tryScaleDown(shards []*shardInfo, maxSeries int64, maxIdle time.Duration, l
 }
 
 // shardCanBeIdle return true if all targets of src can be transfer to other
-func shardCanBeIdle(src *shardInfo, shards []*shardInfo, maxSeries int64) bool {
+func (c *Coordinator) shardCanBeIdle(src *shardInfo, shards []*shardInfo) bool {
 	if !src.changeAble {
 		return false
 	}
@@ -374,7 +388,7 @@ func shardCanBeIdle(src *shardInfo, shards []*shardInfo, maxSeries int64) bool {
 	spaces := make([]int64, 0)
 	for _, s := range shards {
 		if s != src && s.changeAble {
-			spaces = append(spaces, maxSeries-s.runtime.HeadSeries)
+			spaces = append(spaces, c.maxSeries-s.runtime.HeadSeries)
 		}
 	}
 
@@ -399,18 +413,18 @@ l1:
 	return total != 0
 }
 
-func shardBecomeIdle(src *shardInfo, shards []*shardInfo, maxSeries int64, log logrus.FieldLogger) bool {
+func (c *Coordinator) shardBecomeIdle(src *shardInfo, shards []*shardInfo) bool {
 	for hash, tar := range src.scraping {
 		if tar.TargetState != target.StateNormal || tar.ScrapeTimes < minWaitScrapeTimes {
 			continue
 		}
 
-		to := getFreeShard(shards, tar.Series, maxSeries)
+		to := c.getFreeShard(shards, tar.Series)
 		// no free space to receive target
 		if to == nil || to == src {
 			return false
 		}
-		log.Infof("transfer target from %s to %s series = (%d) ", src.shard.ID, to.shard.ID, tar.Series)
+		c.log.Infof("transfer target from %s to %s series = (%d) ", src.shard.ID, to.shard.ID, tar.Series)
 		transferTarget(src, to, hash)
 	}
 
@@ -418,17 +432,25 @@ func shardBecomeIdle(src *shardInfo, shards []*shardInfo, maxSeries int64, log l
 }
 
 // tryScaleUp calculate the expect scale according to 'needSpace'
-func tryScaleUp(shard []*shardInfo, needSpace int64, maxSeries int64, maxShard int32) int32 {
+func (c *Coordinator) tryScaleUp(shard []*shardInfo, needSpace int64) int32 {
 	health := changeAbleShardsInfo(shard)
 	exp := int32(len(health))
-	exp += int32((needSpace / maxSeries) + 1)
+	exp += int32((needSpace / c.maxSeries) + 1)
 
 	if exp < int32(len(shard)) {
 		exp = int32(len(shard))
 	}
-
-	if exp > maxShard {
-		exp = maxShard
-	}
 	return exp
+}
+
+func mergeScrapeStatus(a, b map[uint64]*target.ScrapeStatus) map[uint64]*target.ScrapeStatus {
+	for k, v := range b {
+		old := a[k]
+		if old == nil ||
+			(old.Health != scrape.HealthGood && v.Health == scrape.HealthGood) ||
+			(v.Health == scrape.HealthGood && v.Series > old.Series) {
+			a[k] = v
+		}
+	}
+	return a
 }

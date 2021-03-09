@@ -49,6 +49,7 @@ var cdCfg = struct {
 	shardSelector    string
 	shardPort        int
 	shardMaxSeries   int64
+	shardMinShard    int32
 	shardMaxShard    int32
 	shardMaxIdleTime time.Duration
 	shardDeletePVC   bool
@@ -66,12 +67,13 @@ func init() {
 	coordinatorCmd.Flags().IntVar(&cdCfg.shardPort, "shard.port", 8080, "the port of sidecar server")
 	coordinatorCmd.Flags().Int64Var(&cdCfg.shardMaxSeries, "shard.max-series", 1000000, "max series of per shard")
 	coordinatorCmd.Flags().Int32Var(&cdCfg.shardMaxShard, "shard.max-shard", 999999, "max shard number")
+	coordinatorCmd.Flags().Int32Var(&cdCfg.shardMinShard, "shard.min-shard", 0, "min shard number")
+
 	coordinatorCmd.Flags().DurationVar(&cdCfg.shardMaxIdleTime, "shard.max-idle-time", 0,
 		"wait time before shard is removed after shard become idle,"+
 			"scale down is disabled if this flag is 0")
 	coordinatorCmd.Flags().BoolVar(&cdCfg.shardDeletePVC, "shard.delete-pvc", true, "kvass will delete pvc when shard is removed")
-
-	coordinatorCmd.Flags().IntVar(&cdCfg.exploreMaxCon, "explore.concurrence", 50, "max explore concurrence")
+	coordinatorCmd.Flags().IntVar(&cdCfg.exploreMaxCon, "explore.concurrence", 1000, "max explore concurrence")
 	coordinatorCmd.Flags().StringVar(&cdCfg.webAddress, "web.address", ":9090", "server bind address")
 	coordinatorCmd.Flags().StringVar(&cdCfg.configFile, "config.file", "prometheus.yml", "config file path")
 	coordinatorCmd.Flags().DurationVar(&cdCfg.syncInterval, "coordinator.interval", time.Second*10, "the interval of coordinator loop")
@@ -121,15 +123,16 @@ distribution targets to shards`,
 			exp                    = explore.New(scrapeManager, lg.WithField("component", "explore"))
 			cfgManager             = prom.NewConfigManager(cdCfg.configFile, lg.WithField("component", "config manager"))
 
-			ins = k8s_shard.New(cli, cdCfg.shardNamespace,
+			gm = k8s_shard.NewReplicasManager(cli, cdCfg.shardNamespace,
 				cdCfg.shardSelector,
 				cdCfg.shardPort,
 				cdCfg.shardDeletePVC,
 				lg.WithField("component", "shard manager"))
 
 			cd = coordinator.NewCoordinator(
-				ins,
+				gm,
 				cdCfg.shardMaxSeries,
+				cdCfg.shardMinShard,
 				cdCfg.shardMaxShard,
 				cdCfg.shardMaxIdleTime,
 				cdCfg.syncInterval,

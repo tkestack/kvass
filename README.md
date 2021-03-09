@@ -23,6 +23,8 @@ Coordinator do service discovery, Prometheus shards management and assign target
       * [Targets transfer](#Targets-transfer)
       * [Shard de-pressure](#Shard-de-pressure)
       * [Shard scaling down](#Shard-scaling-down)
+      * [Limit shards number](#Limit-shards-number)
+      * [Target scheduling strategy](#Target-scheduling-strategy)
    * [Demo](#Demo)
    * [Best practice](#Best-practice)
       * [Flag values suggestion](#Flag-values-suggestion)
@@ -84,7 +86,7 @@ If you want to use remote storage like influxdb, just set "remote write" in orig
 
 ## Multiple replicas
 
-Coordinator use label selector to select shards StatefulSets, every StatefulSet is a replica, Kvass puts together Pods with same index of different StatefulSet into one Shards Group.
+Coordinator uses the label selector to select StatefulSets. Each StatefulSet is a replica. Management of targets between replicas is independent.
 
 > --shard.selector=app.kubernetes.io/name=prometheus
 
@@ -124,6 +126,22 @@ If `StatefulSet` is used to manage shards, you can add a parameter that will all
 > ```
 > - --shard.delete-pvc=true // default
 > ```
+
+## Limit shards number
+
+The maximum and minimum number of shards for the Coordinator can be limited by setting the following flags.
+Note that if the minimum number of sharding is set, then you will only start Coordinate if the number of sharding available is at least the minimum number.
+
+```
+--shard.max-shard=99999 //default
+--shard.min-shard=0 //default
+```
+
+## Target scheduling strategy
+
+If ```--shard.max-idle-time!=0```, both new and migrated targets will be assigned to lower-numbered shards in preference.
+
+If  ```--shard.max-idle-time=0```, it will be randomly allocated to the shard with space, which is especially useful with the ```--shard.min-shard``` flag.
 
 # Demo
 

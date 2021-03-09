@@ -42,6 +42,14 @@ func (ts *testingShard) assert(t *testing.T) {
 	require.JSONEq(t, test.MustJSON(ts.wantTargets), test.MustJSON(ts.resultTargets))
 }
 
+type fakeReplicasManager struct {
+	fd *fakeShardsManager
+}
+
+func (f *fakeReplicasManager) Replicas() ([]shard.Manager, error) {
+	return []shard.Manager{f.fd}, nil
+}
+
 type fakeShardsManager struct {
 	resultRep int32
 	wantRep   int32
@@ -49,15 +57,12 @@ type fakeShardsManager struct {
 }
 
 // Shards return current Shards in the cluster
-func (f *fakeShardsManager) Shards() ([]*shard.Group, error) {
-	ret := make([]*shard.Group, 0)
+func (f *fakeShardsManager) Shards() ([]*shard.Shard, error) {
+	ret := make([]*shard.Shard, 0)
 	for i, s := range f.shards {
-		g := shard.NewGroup(fmt.Sprint(i), logrus.New())
-		rep := shard.NewReplicas(fmt.Sprint(i)+"-r0", "", logrus.New())
-		g.AddReplicas(rep)
-
+		sd := shard.NewShard(fmt.Sprint(i)+"-r0", "", true, logrus.New())
 		temp := s
-		rep.APIGet = func(url string, ret interface{}) error {
+		sd.APIGet = func(url string, ret interface{}) error {
 			dm := map[string]interface{}{
 				"/api/v1/shard/targets/":     temp.targetStatus,
 				"/api/v1/shard/runtimeinfo/": temp.rtInfo,
@@ -65,11 +70,11 @@ func (f *fakeShardsManager) Shards() ([]*shard.Group, error) {
 			return test.CopyJSON(ret, dm[url])
 		}
 
-		rep.APIPost = func(url string, req interface{}, ret interface{}) (err error) {
+		sd.APIPost = func(url string, req interface{}, ret interface{}) (err error) {
 			return test.CopyJSON(&temp.resultTargets, req)
 		}
 
-		ret = append(ret, g)
+		ret = append(ret, sd)
 	}
 
 	return ret, nil
@@ -100,6 +105,7 @@ func TestCoordinator_RunOnce(t *testing.T) {
 		name             string
 		maxSeries        int64
 		maxShard         int32
+		minShard         int32
 		maxIdleTime      time.Duration
 		period           time.Duration
 		getExploreResult func(hash uint64) *target.ScrapeStatus
@@ -107,9 +113,10 @@ func TestCoordinator_RunOnce(t *testing.T) {
 		shardManager     *fakeShardsManager
 	}{
 		{
-			name:      "delete not exist target",
-			maxSeries: 1000,
-			maxShard:  1000,
+			name:        "delete not exist target",
+			maxSeries:   1000,
+			maxShard:    1000,
+			maxIdleTime: time.Second,
 			getActive: func() map[uint64]*discovery.SDTargets {
 				return map[uint64]*discovery.SDTargets{}
 			},
@@ -129,9 +136,10 @@ func TestCoordinator_RunOnce(t *testing.T) {
 			},
 		},
 		{
-			name:      "assign new target normally",
-			maxSeries: 1000,
-			maxShard:  1000,
+			name:        "assign new target normally",
+			maxSeries:   1000,
+			maxShard:    1000,
+			maxIdleTime: time.Second,
 			getActive: func() map[uint64]*discovery.SDTargets {
 				return map[uint64]*discovery.SDTargets{
 					1: {
@@ -152,6 +160,7 @@ func TestCoordinator_RunOnce(t *testing.T) {
 						rtInfo: &shard.RuntimeInfo{
 							HeadSeries: 1,
 						},
+						targetStatus: map[uint64]*target.ScrapeStatus{},
 						wantTargets: shard.UpdateTargetsRequest{
 							Targets: map[string][]*target.Target{
 								"test": {
@@ -168,9 +177,10 @@ func TestCoordinator_RunOnce(t *testing.T) {
 			},
 		},
 		{
-			name:      "assign new target, shard not changeable, don't scale up",
-			maxSeries: 1000,
-			maxShard:  1000,
+			name:        "assign new target, shard not changeable, don't scale up",
+			maxSeries:   1000,
+			maxShard:    1000,
+			maxIdleTime: time.Second,
 			getActive: func() map[uint64]*discovery.SDTargets {
 				return map[uint64]*discovery.SDTargets{
 					1: {
@@ -200,9 +210,10 @@ func TestCoordinator_RunOnce(t *testing.T) {
 			},
 		},
 		{
-			name:      "assign new target, need scale up, but max shard limit ",
-			maxSeries: 1000,
-			maxShard:  0,
+			name:        "assign new target, need scale up, but max shard limit ",
+			maxSeries:   1000,
+			maxShard:    0,
+			maxIdleTime: time.Second,
 			getActive: func() map[uint64]*discovery.SDTargets {
 				return map[uint64]*discovery.SDTargets{
 					1: {
@@ -221,9 +232,10 @@ func TestCoordinator_RunOnce(t *testing.T) {
 			},
 		},
 		{
-			name:      "assign new target, need scale up",
-			maxSeries: 1000,
-			maxShard:  1000,
+			name:        "assign new target, need scale up",
+			maxSeries:   1000,
+			maxShard:    1000,
+			maxIdleTime: time.Second,
 			getActive: func() map[uint64]*discovery.SDTargets {
 				return map[uint64]*discovery.SDTargets{
 					1: {
@@ -242,9 +254,10 @@ func TestCoordinator_RunOnce(t *testing.T) {
 			},
 		},
 		{
-			name:      "shard overload, no space, need scale up",
-			maxSeries: 1000,
-			maxShard:  1000,
+			name:        "shard overload, no space, need scale up",
+			maxSeries:   1000,
+			maxShard:    1000,
+			maxIdleTime: time.Second,
 			getActive: func() map[uint64]*discovery.SDTargets {
 				return map[uint64]*discovery.SDTargets{
 					1: {
@@ -275,9 +288,10 @@ func TestCoordinator_RunOnce(t *testing.T) {
 			},
 		},
 		{
-			name:      "shard overload, transfer begin",
-			maxSeries: 1000,
-			maxShard:  1000,
+			name:        "shard overload, transfer begin",
+			maxSeries:   1000,
+			maxShard:    1000,
+			maxIdleTime: time.Second,
 			getActive: func() map[uint64]*discovery.SDTargets {
 				return map[uint64]*discovery.SDTargets{
 					1: {
@@ -335,9 +349,10 @@ func TestCoordinator_RunOnce(t *testing.T) {
 			},
 		},
 		{
-			name:      "shard overload, transfer end",
-			maxSeries: 1000,
-			maxShard:  1000,
+			name:        "shard overload, transfer end",
+			maxSeries:   1000,
+			maxShard:    1000,
+			maxIdleTime: time.Second,
 			getActive: func() map[uint64]*discovery.SDTargets {
 				return map[uint64]*discovery.SDTargets{
 					1: {
@@ -550,7 +565,7 @@ func TestCoordinator_RunOnce(t *testing.T) {
 
 	for _, cs := range cases {
 		t.Run(cs.name, func(t *testing.T) {
-			c := NewCoordinator(cs.shardManager, cs.maxSeries, cs.maxShard, cs.maxIdleTime, cs.period, func() string {
+			c := NewCoordinator(&fakeReplicasManager{cs.shardManager}, cs.maxSeries, cs.maxShard, cs.minShard, cs.maxIdleTime, cs.period, func() string {
 				return ""
 			}, cs.getExploreResult, cs.getActive, logrus.New())
 			require.NoError(t, c.runOnce())
@@ -597,7 +612,7 @@ func TestCoordinator_LastGlobalScrapeStatus(t *testing.T) {
 		}
 	}
 
-	c := NewCoordinator(shardManager, 100, 100, 0, time.Second, func() string {
+	c := NewCoordinator(&fakeReplicasManager{shardManager}, 100, 100, 100, 0, time.Second, func() string {
 		return ""
 	}, getStatus, active, logrus.New())
 

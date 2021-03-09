@@ -66,9 +66,6 @@ func NewService(
 		return api.Data(s.targetManager.TargetsInfo().Status)
 	}))
 	s.ginEngine.POST(s.path("/api/v1/shard/targets/"), api.Wrap(s.lg, s.updateTargets))
-	s.ginEngine.GET(s.path("/api/v1/status/config/"), api.Wrap(lg, func(ctx *gin.Context) *api.Result {
-		return api.Data(gin.H{"yaml": string(cfgManager.ConfigInfo().RawContent)})
-	}))
 	s.ginEngine.POST(s.path("/-/reload/"), api.Wrap(lg, func(ctx *gin.Context) *api.Result {
 		if err := s.cfgManager.Reload(); err != nil {
 			return api.BadDataErr(err, "reload failed")

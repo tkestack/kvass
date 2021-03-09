@@ -35,7 +35,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func createStatefulSet(t *testing.T, cli kubernetes.Interface, name string, rep int32) {
+func createStatefulSet(t *testing.T, cli kubernetes.Interface, name string, rep int32) *appsv1.StatefulSet {
 	r := require.New(t)
 	sts1 := &appsv1.StatefulSet{}
 	sts1.Name = name
@@ -65,14 +65,14 @@ func createStatefulSet(t *testing.T, cli kubernetes.Interface, name string, rep 
 	}
 
 	r.NoError(err)
+	return sts1
 }
 
 func TestStatefulSet_Shards(t *testing.T) {
 	cli := fake.NewSimpleClientset()
-	createStatefulSet(t, cli, "rep1", 2)
+	sf := createStatefulSet(t, cli, "rep1", 2)
 
-	sts := New(cli, "default", "k8s-app=prometheus",
-		8080, false, logrus.New())
+	sts := newShardManager(cli, sf, 8080, true, logrus.New())
 	sts.getPods = func(lb map[string]string) (list *v1.PodList, e error) {
 		pl := &v1.PodList{}
 		for i := 0; i < 2; i++ {
@@ -94,11 +94,6 @@ func TestStatefulSet_Shards(t *testing.T) {
 	r := require.New(t)
 	r.NoError(err)
 	r.Equal(2, len(shards))
-
-	for i, s := range shards {
-		r.Equal(fmt.Sprintf("shard-%d", i), s.ID)
-		r.Equal(1, len(s.Replicas()))
-	}
 }
 
 func TestStatefulSet_ChangeScale(t *testing.T) {
@@ -114,8 +109,8 @@ func TestStatefulSet_ChangeScale(t *testing.T) {
 func testScaleUp(t *testing.T) {
 	r := require.New(t)
 	cli := fake.NewSimpleClientset()
-	createStatefulSet(t, cli, "rep1", 2)
-	sts := New(cli, "default", "k8s-app=prometheus", 8080, true, logrus.New())
+	sf := createStatefulSet(t, cli, "rep1", 2)
+	sts := newShardManager(cli, sf, 8080, true, logrus.New())
 	r.NoError(sts.ChangeScale(10))
 	s, err := cli.AppsV1().StatefulSets("default").Get(context.TODO(), "rep1", v12.GetOptions{})
 	r.NoError(err)
@@ -125,8 +120,8 @@ func testScaleUp(t *testing.T) {
 func testScaleDown(t *testing.T, deletePvc bool) {
 	r := require.New(t)
 	cli := fake.NewSimpleClientset()
-	createStatefulSet(t, cli, "rep1", 2)
-	sts := New(cli, "default", "k8s-app=prometheus", 8080, deletePvc, logrus.New())
+	sf := createStatefulSet(t, cli, "rep1", 2)
+	sts := newShardManager(cli, sf, 8080, deletePvc, logrus.New())
 	r.NoError(sts.ChangeScale(1))
 	s, err := cli.AppsV1().StatefulSets("default").Get(context.TODO(), "rep1", v12.GetOptions{})
 	r.NoError(err)
@@ -138,5 +133,4 @@ func testScaleDown(t *testing.T, deletePvc bool) {
 	} else {
 		r.Equal(2, len(pvc.Items))
 	}
-
 }
