@@ -1,10 +1,13 @@
 
-## [v0.0.7] - 2021-03-09
+## [v0.1.0] - 2021-03-09
 ### Feat
+- external_labels not affects config hash now
 - update workflow
 - support min shards, change replicas management and rand assign ([#38](https://github.com/tkestack/kvass/issues/38))
 
 ### Fix
+- coordinator min shard chaos with max shard
+- sidecar always panic at first time started
 - update workflow
 - go lint
 - base image
@@ -37,37 +40,14 @@
 
 
 ## [v0.0.2] - 2020-12-11
-### Doc
-- add README_CN.md
-- update README.md
-- update README.md
-- update README.md
-- update README.md
-- update README.md
-- update README.md
-- update README.md
-- update README.md
-
 ### Fix
 - Dockerfile and Makefile
 - unmarshal bear_token/password of remote write/read config ([#6](https://github.com/tkestack/kvass/issues/6))
 - upgrade prometheus lib
 - flag descriptions of Coordinator
 
-### Style
-- add some unit test
-- add unit tests
-- add test
-- clean code
-
 
 ## v0.0.1 - 2020-11-20
-### Clean
-- remove binary
-
-### Doc
-- add comments
-
 ### Feat
 - support invalid label name
 - support inject APIServer information for kubernetes SD
@@ -75,8 +55,4 @@
 
 ### Fix
 - shard client return empty RuntimeInfo if request failed
-
-### Style
-- clean code
-- remove unused code
 

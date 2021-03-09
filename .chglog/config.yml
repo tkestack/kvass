@@ -5,10 +5,10 @@ info:
   repository_url: https://github.com/tkestack/kvass
 options:
   commits:
-    # filters:
-    #   Type:
-    #     - feat
-    #     - fix
+     filters:
+       Type:
+        - feat
+        - fix
     #     - perf
     #     - refactor
   commit_groups:
