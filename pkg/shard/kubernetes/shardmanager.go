@@ -70,11 +70,28 @@ func (s *shardManager) Shards() ([]*shard.Shard, error) {
 		return nil, errors.Wrap(err, "list pod")
 	}
 
-	ret := make([]*shard.Shard, 0)
-	for _, p := range pods.Items {
-		url := fmt.Sprintf("http://%s:%d", p.Status.PodIP, s.port)
-		ret = append(ret, shard.NewShard(p.Name, url, k8sutil.IsPodReady(&p), s.lg.WithField("shard", p.Name)))
+	sts, err := s.cli.AppsV1().StatefulSets(s.sts.Namespace).Get(context.TODO(), s.sts.Name, v12.GetOptions{})
+	if err != nil {
+		return nil, err
 	}
+
+	podMap := map[string]v1.Pod{}
+	for _, p := range pods.Items {
+		podMap[p.Name] = p
+	}
+
+	ret := make([]*shard.Shard, 0)
+	for i := int32(0); i < *sts.Spec.Replicas; i ++ {
+		if p, ok := podMap[fmt.Sprintf("%s-%d", sts.Name, i)]; ok {
+			url := fmt.Sprintf("http://%s:%d", p.Status.PodIP, s.port)
+			ret = append(ret, shard.NewShard(p.Name, url, k8sutil.IsPodReady(&p), s.lg.WithField("shard", p.Name)))
+		}
+	}
+
+	//for _, p := range pods.Items {
+	//	url := fmt.Sprintf("http://%s:%d", p.Status.PodIP, s.port)
+	//	ret = append(ret, shard.NewShard(p.Name, url, k8sutil.IsPodReady(&p), s.lg.WithField("shard", p.Name)))
+	//}
 
 	return ret, nil
 }
