@@ -19,11 +19,13 @@ package sidecar
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
 	"path"
+	"strings"
 	"time"
 	"tkestack.io/kvass/pkg/shard"
 	"tkestack.io/kvass/pkg/target"
@@ -44,6 +46,7 @@ type TargetsInfo struct {
 	IdleAt *time.Time
 	// Status is the runtime status of all targets
 	Status map[uint64]*target.ScrapeStatus `json:"-"`
+	globalTargetMap map[uint64]bool
 }
 
 func newTargetsInfo() TargetsInfo {
@@ -118,19 +121,27 @@ func (t *TargetsManager) UpdateTargets(req *shard.UpdateTargetsRequest) error {
 }
 
 func (t *TargetsManager) updateIdleState() {
-	if len(t.targets.Status) == 0 && t.targets.IdleAt == nil {
+	t.log.Info(fmt.Sprintf("Status len: %d", len(t.targets.Status)))
+	t.log.Info(fmt.Sprintf("Global target len: %d", len(t.targets.globalTargetMap)))
+	normalTarNum := len(t.targets.Status) - len(t.targets.globalTargetMap)
+	if normalTarNum == 0 && t.targets.IdleAt == nil {
 		t.targets.IdleAt = types.TimePtr(time.Now())
+		t.log.Info(fmt.Sprintf("Shard is idle. Time: %s", t.targets.IdleAt.String()))
 	}
 
-	if len(t.targets.Status) != 0 {
+	if normalTarNum != 0 {
 		t.targets.IdleAt = nil
 	}
 }
 
 func (t *TargetsManager) updateStatus() {
 	status := map[uint64]*target.ScrapeStatus{}
+	globalTargetMap := map[uint64]bool{}
 	for job, ts := range t.targets.Targets {
 		for _, tar := range ts {
+			if strings.HasPrefix(job, "kvass_global_") {
+				globalTargetMap[tar.Hash] = true
+			}
 			if t.targets.Status[tar.Hash] == nil {
 				status[tar.Hash] = target.NewScrapeStatus(tar.Series)
 			} else {
@@ -145,6 +156,7 @@ func (t *TargetsManager) updateStatus() {
 		}
 	}
 	t.targets.Status = status
+	t.targets.globalTargetMap = globalTargetMap
 }
 
 func (t *TargetsManager) doCallbacks() error {

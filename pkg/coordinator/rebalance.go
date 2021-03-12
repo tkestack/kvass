@@ -18,6 +18,7 @@
 package coordinator
 
 import (
+	"fmt"
 	"github.com/prometheus/prometheus/scrape"
 	"golang.org/x/sync/errgroup"
 	"math/rand"
@@ -147,13 +148,17 @@ func (c *Coordinator) applyShardsInfo(shards []*shardInfo) {
 // 1. not exist in active targets
 // 2. is in_transfer state and had been scraped by other shard
 // 3. is normal state and had been scraped by other shard with lower head series
-func (c *Coordinator) gcTargets(changeAbleShards []*shardInfo, active map[uint64]*discovery.SDTargets) {
+func (c *Coordinator) gcTargets(changeAbleShards []*shardInfo, active , globalTargets map[uint64]*discovery.SDTargets) {
 	for _, s := range changeAbleShards {
 		for h, tar := range s.scraping {
 			// target not exist in active targets
 			if _, exist := active[h]; !exist {
 				delete(s.scraping, h)
 				continue
+			} else {
+				if _, exist := globalTargets[h];exist {
+					continue
+				}
 			}
 
 			if tar.ScrapeTimes < minWaitScrapeTimes {
@@ -185,7 +190,7 @@ func (c *Coordinator) gcTargets(changeAbleShards []*shardInfo, active map[uint64
 // make expect series of targets less than maxSeries * 0.5 if current head series > maxSeries 1.4
 // make expect series of targets less than maxSeries * 0.2 if current head series > maxSeries 1.6
 // remove all targets if current head series > maxSeries 1.8
-func (c *Coordinator) alleviateShards(changeAbleShards []*shardInfo) (needSpace int64) {
+func (c *Coordinator) alleviateShards(changeAbleShards []*shardInfo, globalTargets map[uint64]*discovery.SDTargets) (needSpace int64) {
 	var threshold = []struct {
 		maxSeriesRate    float64
 		expectSeriesRate float64
@@ -212,7 +217,7 @@ func (c *Coordinator) alleviateShards(changeAbleShards []*shardInfo) (needSpace 
 		for _, t := range threshold {
 			if s.runtime.HeadSeries >= seriesWithRate(c.maxSeries, t.maxSeriesRate) {
 				c.log.Infof("%s need alleviate", s.shard.ID)
-				needSpace += c.alleviateShard(s, changeAbleShards, seriesWithRate(c.maxSeries, t.expectSeriesRate))
+				needSpace += c.alleviateShard(s, changeAbleShards, seriesWithRate(c.maxSeries, t.expectSeriesRate), globalTargets)
 				break
 			}
 		}
@@ -221,11 +226,15 @@ func (c *Coordinator) alleviateShards(changeAbleShards []*shardInfo) (needSpace 
 	return needSpace
 }
 
-func (c *Coordinator) alleviateShard(s *shardInfo, changeAbleShards []*shardInfo, expSeries int64) (needSpace int64) {
+func (c *Coordinator) alleviateShard(s *shardInfo, changeAbleShards []*shardInfo, expSeries int64, globalTargets map[uint64]*discovery.SDTargets) (needSpace int64) {
 	total := s.totalTargetsSeries()
 	for hash, tar := range s.scraping {
 		if total < expSeries {
 			break
+		}
+
+		if _, isGlobal := globalTargets[hash]; isGlobal {
+			continue
 		}
 
 		if tar.TargetState != target.StateNormal || tar.Health != scrape.HealthGood || tar.ScrapeTimes < minWaitScrapeTimes {
@@ -268,18 +277,32 @@ func seriesWithRate(series int64, rate float64) int64 {
 func (c *Coordinator) assignNoScrapingTargets(
 	shards []*shardInfo,
 	active map[uint64]*discovery.SDTargets,
+	globalTargets map[uint64]*discovery.SDTargets,
 	globalScrapeStatus map[uint64]*target.ScrapeStatus,
 ) (needSpace int64) {
 	healthShards := changeAbleShardsInfo(shards)
 	scraping := map[uint64]bool{}
 	for _, s := range shards {
+		// Check and assign global targets for every shard.
+		for h, _ := range globalTargets {
+			if _, exist := s.scraping[h]; s.scraping != nil && !exist {
+				s.scraping[h] = globalScrapeStatus[h]
+				s.runtime.HeadSeries += globalScrapeStatus[h].Series
+			}
+		}
+
 		for hash := range s.scraping {
 			scraping[hash] = true
 		}
 	}
 
 	for hash := range active {
-		if scraping[hash] {
+		//isGlobal := false
+		//if _, isGlobal = globalTargets[hash]; scraping[hash] && !isGlobal{
+		//	continue
+		//}
+
+		if scraping[hash]{
 			continue
 		}
 
@@ -432,10 +455,12 @@ func (c *Coordinator) shardBecomeIdle(src *shardInfo, shards []*shardInfo) bool 
 }
 
 // tryScaleUp calculate the expect scale according to 'needSpace'
-func (c *Coordinator) tryScaleUp(shard []*shardInfo, needSpace int64) int32 {
+func (c *Coordinator) tryScaleUp(shard []*shardInfo, globalSeries, needSpace int64) int32 {
 	health := changeAbleShardsInfo(shard)
+	free := c.maxSeries - globalSeries
+	c.log.Info(fmt.Sprintf("After global target assigned, free space: %d", free))
 	exp := int32(len(health))
-	exp += int32((needSpace / c.maxSeries) + 1)
+	exp += int32((needSpace / free) + 1)
 
 	if exp < int32(len(shard)) {
 		exp = int32(len(shard))
