@@ -103,6 +103,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", contentType)
 	// send origin result to prometheus
 	if _, err := io.Copy(w, bytes.NewBuffer(data)); err != nil {
 		scrapErr = fmt.Errorf("copy data to prometheus failed %v", err)
