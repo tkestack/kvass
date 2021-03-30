@@ -45,10 +45,16 @@ spec:
             - --grpc-address=:10901
             - --http-address=:10902
             - --data-dir=/var/thanos/rule
-            - --query=dnssrv+_http._tcp.thanos-query.default.svc.cluster.local
+            - --query=dnssrv+_http._tcp.thanos-query.$(NAMESPACE).svc.cluster.local
             - --eval-interval=10s
             - --tsdb.retention=3h
-          image: thanosio/thanos:v0.16.0-rc.1
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+          image: thanosio/thanos:v0.18.0
           volumeMounts:
           - mountPath: /etc/thanos/rules
             name: rules
