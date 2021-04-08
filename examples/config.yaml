@@ -48,7 +48,7 @@ data:
     - name: count
       rules:
       - expr: |
-          count(metrics0)
+          count(a00000000000metrics0)
         record: metrics_count
 
 

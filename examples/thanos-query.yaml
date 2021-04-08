@@ -40,9 +40,15 @@ spec:
             - --grpc-address=0.0.0.0:10901
             - --http-address=0.0.0.0:9090
             - --query.partial-response
-            - --store=dnssrv+_grpc._tcp.prometheus.default.svc.cluster.local
-            - --store=dnssrv+_grpc._tcp.thanos-rule.default.svc.cluster.local
-          image: thanosio/thanos:v0.16.0-rc.1
+            - --store=dnssrv+_grpc._tcp.prometheus.$(NAMESPACE).svc.cluster.local
+            - --store=dnssrv+_grpc._tcp.thanos-rule.$(NAMESPACE).svc.cluster.local
+          image: thanosio/thanos:v0.18.0
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
           livenessProbe:
             failureThreshold: 4
             httpGet:

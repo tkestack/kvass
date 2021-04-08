@@ -42,7 +42,7 @@ spec:
     spec:
       containers:
         - name: thanos
-          image: thanosio/thanos:v0.16.0-rc.1
+          image: thanosio/thanos:v0.18.0
           args:
             - sidecar
             - --tsdb.path=/prometheus
@@ -123,19 +123,6 @@ spec:
           name: config-out
         - emptyDir: {}
           name: tls-assets
-  volumeClaimTemplates:
-    - metadata:
-        labels:
-          k8s-app: prometheus
-        name: data
-      spec:
-        accessModes:
-          - ReadWriteOnce
-        resources:
-          requests:
-            storage: 10Gi
-        storageClassName: cbs
-        volumeMode: Filesystem
   updateStrategy:
     rollingUpdate:
       partition: 0
