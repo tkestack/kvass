@@ -19,7 +19,9 @@ package coordinator
 
 import (
 	"context"
+	"fmt"
 	"github.com/pkg/errors"
+	"strings"
 	"time"
 	"tkestack.io/kvass/pkg/discovery"
 	"tkestack.io/kvass/pkg/shard"
@@ -100,6 +102,8 @@ func (c *Coordinator) runOnce() error {
 			active           = c.getActive()
 			shardsInfo       = c.getShardInfos(shards)
 			changeAbleShards = changeAbleShardsInfo(shardsInfo)
+			// global targets are those jobs that with "kvass_global_" as its name prefix
+			globalTargets 	 = getGlobalTarget(active)
 		)
 
 		if int32(len(changeAbleShards)) < c.minShard { // insure that scaling up to min shard
@@ -110,15 +114,23 @@ func (c *Coordinator) runOnce() error {
 		}
 
 		lastGlobalScrapeStatus := c.globalScrapeStatus(active, shardsInfo)
-		c.gcTargets(changeAbleShards, active)
-		needSpace := c.alleviateShards(changeAbleShards)
-		needSpace += c.assignNoScrapingTargets(shardsInfo, active, lastGlobalScrapeStatus)
+		c.gcTargets(changeAbleShards, active, globalTargets)
+		needSpace := c.alleviateShards(changeAbleShards, globalTargets)
+		// TODO: assign global target
+		needSpace += c.assignNoScrapingTargets(shardsInfo, active, globalTargets, lastGlobalScrapeStatus)
 
 		scale := int32(len(shardsInfo))
 		if needSpace != 0 {
 			c.log.Infof("need space %d", needSpace)
-			scale = c.tryScaleUp(shardsInfo, needSpace)
+			globalSeries := getSeriesTotal(globalTargets, lastGlobalScrapeStatus)
+			c.log.Info(fmt.Sprintf("Global series: %d", globalSeries))
+			if c.maxSeries - globalSeries <= 0 {
+				c.log.Error("There is no enough to assign other targets after global targets has been assigned.")
+				return fmt.Errorf("There is no enough to assign other targets after global targets has been assigned")
+			}
+			scale = c.tryScaleUp(shardsInfo, globalSeries, needSpace)
 		} else if c.maxIdleTime != 0 {
+			// TODO: if there is only global target in the shard, need to scale down
 			scale = c.tryScaleDown(shardsInfo)
 		}
 
@@ -142,4 +154,22 @@ func (c *Coordinator) runOnce() error {
 
 	c.lastGlobalScrapeStatus = newLastGlobalScrapeStatus
 	return nil
+}
+
+func getSeriesTotal(targets map[uint64]*discovery.SDTargets, globalScrapeStatus map[uint64]*target.ScrapeStatus,) int64 {
+	var total int64 = 0
+	for h, _ := range targets {
+		total += globalScrapeStatus[h].Series
+	}
+	return total
+}
+
+func getGlobalTarget(active map[uint64]*discovery.SDTargets) map[uint64]*discovery.SDTargets {
+	globalTargets := make(map[uint64]*discovery.SDTargets)
+	for k, v := range active {
+		if strings.HasPrefix(v.Job, "kvass_global_") {
+			globalTargets[k] = v
+		}
+	}
+	return globalTargets
 }
