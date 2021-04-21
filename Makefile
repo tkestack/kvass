@@ -30,3 +30,5 @@ build: dep ## Build the binary file
 clean: ## Remove previous build
 	@rm -fr kvass
 	@rm -fr cover.out coverage.txt
+clog:
+	@git-chglog -o CHANGELOG.md
