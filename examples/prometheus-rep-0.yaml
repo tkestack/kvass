@@ -42,7 +42,7 @@ spec:
     spec:
       containers:
         - name: thanos
-          image: thanosio/thanos:v0.16.0-rc.1
+          image: thanosio/thanos:v0.18.0
           args:
             - sidecar
             - --tsdb.path=/prometheus
@@ -134,6 +134,7 @@ spec:
         resources:
           requests:
             storage: 10Gi
+        storageClassName: cbs
         volumeMode: Filesystem
   updateStrategy:
     rollingUpdate:
