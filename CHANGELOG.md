@@ -1,4 +1,15 @@
 
+## [v0.1.1] - 2021-04-21
+### Feat
+- use weighted random when assign new target with max-idle-timeout=0
+
+### Fix
+- scale down blocked if any idle shard exited
+- scale up when target is too big
+- concurrent map iteration and map write on discovery targets map
+- set content-type when copy data to prometheus
+
+
 ## [v0.1.0] - 2021-03-09
 ### Feat
 - external_labels not affects config hash now
