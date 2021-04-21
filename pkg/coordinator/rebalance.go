@@ -278,13 +278,18 @@ func (c *Coordinator) assignNoScrapingTargets(
 		}
 	}
 
-	for hash := range active {
+	for hash, tar := range active {
 		if scraping[hash] {
 			continue
 		}
 
 		status := globalScrapeStatus[hash]
 		if status == nil || status.Health != scrape.HealthGood {
+			continue
+		}
+
+		if status.Series > c.maxSeries {
+			c.log.Warnf("target too big: %s", tar.ShardTarget.NoParamURL())
 			continue
 		}
 
