@@ -377,6 +377,11 @@ func (c *Coordinator) tryScaleDown(shards []*shardInfo) int32 {
 	// try transfer targets from tail shard to head shards
 	for ; i > 0; i-- {
 		from := shards[i]
+		// skip idle shard
+		if from.runtime.IdleStartAt != nil {
+			continue
+		}
+
 		if !c.shardCanBeIdle(from, shards[0:i]) {
 			return scale
 		}
