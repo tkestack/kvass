@@ -132,6 +132,9 @@ func (m *TargetsDiscovery) DropTargets() map[string][]*SDTargets {
 
 // ApplyConfig save new scrape config
 func (m *TargetsDiscovery) ApplyConfig(cfg *prom.ConfigInfo) error {
+	m.targetsLock.Lock()
+	defer m.targetsLock.Unlock()
+
 	newActiveTargets := map[string][]*SDTargets{}
 	newDropTargets := map[string][]*SDTargets{}
 	newCfg := map[string]*config.ScrapeConfig{}
@@ -162,6 +165,9 @@ func (m *TargetsDiscovery) Run(ctx context.Context, sdChan <-chan map[string][]*
 }
 
 func (m *TargetsDiscovery) translateTargets(targets map[string][]*targetgroup.Group) map[string][]*SDTargets {
+	m.targetsLock.Lock()
+	defer m.targetsLock.Unlock()
+
 	res := map[string][]*SDTargets{}
 	for job, tsg := range targets {
 		allActive := make([]*SDTargets, 0)
