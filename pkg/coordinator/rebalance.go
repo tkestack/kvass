@@ -18,9 +18,9 @@
 package coordinator
 
 import (
+	wr "github.com/mroth/weightedrand"
 	"github.com/prometheus/prometheus/scrape"
 	"golang.org/x/sync/errgroup"
-	"math/rand"
 	"time"
 	"tkestack.io/kvass/pkg/discovery"
 	"tkestack.io/kvass/pkg/shard"
@@ -211,7 +211,6 @@ func (c *Coordinator) alleviateShards(changeAbleShards []*shardInfo) (needSpace 
 	for _, s := range changeAbleShards {
 		for _, t := range threshold {
 			if s.runtime.HeadSeries >= seriesWithRate(c.maxSeries, t.maxSeriesRate) {
-				c.log.Infof("%s need alleviate", s.shard.ID)
 				needSpace += c.alleviateShard(s, changeAbleShards, seriesWithRate(c.maxSeries, t.expectSeriesRate))
 				break
 			}
@@ -223,6 +222,10 @@ func (c *Coordinator) alleviateShards(changeAbleShards []*shardInfo) (needSpace 
 
 func (c *Coordinator) alleviateShard(s *shardInfo, changeAbleShards []*shardInfo, expSeries int64) (needSpace int64) {
 	total := s.totalTargetsSeries()
+	if total >= expSeries {
+		c.log.Infof("%s need alleviate", s.shard.ID)
+	}
+
 	for hash, tar := range s.scraping {
 		if total < expSeries {
 			break
@@ -305,22 +308,25 @@ func (c *Coordinator) assignNoScrapingTargets(
 }
 
 func (c *Coordinator) getFreeShard(shards []*shardInfo, series int64) *shardInfo {
-	cond := make([]*shardInfo, 0)
-	isRand := c.maxIdleTime == 0
+	cs := make([]wr.Choice, 0)
 	for _, s := range shards {
 		if s.changeAble && s.runtime.HeadSeries+series < c.maxSeries {
-			if !isRand {
+			if c.maxIdleTime != 0 {
 				return s
 			}
-			cond = append(cond, s)
+			cs = append(cs, wr.Choice{
+				Item:   s,
+				Weight: uint(c.maxSeries - s.runtime.HeadSeries),
+			})
 		}
 	}
 
-	if len(cond) == 0 {
+	if len(cs) == 0 {
 		return nil
 	}
 
-	return cond[rand.Uint64()%uint64(len(cond))]
+	cr, _ := wr.NewChooser(cs...)
+	return cr.Pick().(*shardInfo)
 }
 
 func (c *Coordinator) globalScrapeStatus(

@@ -134,7 +134,6 @@ spec:
         resources:
           requests:
             storage: 10Gi
-        storageClassName: cbs
         volumeMode: Filesystem
   updateStrategy:
     rollingUpdate:

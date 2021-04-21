@@ -8,6 +8,7 @@ require (
 	github.com/go-kit/kit v0.10.0
 	github.com/gobuffalo/packr/v2 v2.2.0
 	github.com/mitchellh/hashstructure/v2 v2.0.1
+	github.com/mroth/weightedrand v0.4.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/common v0.14.0
 	github.com/prometheus/prometheus v1.8.2-0.20201015110737-0a7fdd3b7696
