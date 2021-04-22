@@ -196,6 +196,8 @@ Prometheus的内存使用量和head series有关。
 
 每个Prometheus的内存request建议设置为2C8G.
 
+Sidecar有一个名为```store.path```参数，用于指定将正在采集的
+
 # License
 
 Apache License 2.0, see [LICENSE](./LICENSE).

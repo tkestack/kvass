@@ -193,6 +193,8 @@ The recommended "max series" is 750000, set  Coordinator flag
 
 The memory request of Prometheu with 750000 max series is 8G.
 
+The flag ```--store.path``` of Sidecar must be set to a persistent stores since Sidecar will save scraping targets to disk and reload when it launchs.
+
 # License
 
 Apache License 2.0, see [LICENSE](./LICENSE).

@@ -75,6 +75,10 @@ spec:
           volumeMounts:
             - mountPath: /etc/prometheus/config_out
               name: config-out
+            # sidecar need pvc to store targets list， see '--store.path" flag
+            # sidecar will reload targets list in initialization phase
+            - mountPath: /prometheus
+              name: data
           ports:
             - containerPort: 8080
               name: web
