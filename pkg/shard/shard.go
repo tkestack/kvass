@@ -98,7 +98,9 @@ func (r *Shard) UpdateTarget(request *UpdateTargetsRequest) error {
 	}
 
 	if r.needUpdate(newTargets) {
-		r.log.Infof("%s need update targets", r.ID)
+		if len(newTargets) != 0 || len(r.scraping) != 0 {
+			r.log.Infof("%s need update targets", r.ID)
+		}
 		if err := r.APIPost(r.url+"/api/v1/shard/targets/", &request, nil); err != nil {
 			return err
 		}
@@ -108,7 +110,7 @@ func (r *Shard) UpdateTarget(request *UpdateTargetsRequest) error {
 }
 
 func (r *Shard) needUpdate(targets map[uint64]*target.Target) bool {
-	if len(targets) != len(r.scraping) {
+	if len(targets) != len(r.scraping) || len(targets) == 0 {
 		return true
 	}
 
