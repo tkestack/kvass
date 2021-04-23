@@ -1,4 +1,10 @@
 
+## [v0.1.2] - 2021-04-23
+### Fix
+- empty shard need ensure idle state every coordinate period
+- targets GC should include unhealthy target
+
+
 ## [v0.1.1] - 2021-04-21
 ### Feat
 - use weighted random when assign new target with max-idle-timeout=0
