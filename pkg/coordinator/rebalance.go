@@ -39,10 +39,11 @@ type shardInfo struct {
 	newTargets map[string][]*target.Target
 }
 
-func newShardInfo(shard *shard.Shard) *shardInfo {
+func newShardInfo(sd *shard.Shard) *shardInfo {
 	return &shardInfo{
 		changeAble: true,
-		shard:      shard,
+		shard:      sd,
+		runtime:    &shard.RuntimeInfo{},
 		newTargets: map[string][]*target.Target{},
 	}
 }
@@ -165,7 +166,7 @@ func (c *Coordinator) gcTargets(changeAbleShards []*shardInfo, active map[uint64
 					continue
 				}
 				st := other.scraping[h]
-				if st != nil && st.Health == scrape.HealthGood && st.ScrapeTimes >= minWaitScrapeTimes {
+				if st != nil && st.ScrapeTimes >= minWaitScrapeTimes {
 					// is in_transfer state and had been scraped by other shard
 					if (tar.TargetState == target.StateInTransfer && st.TargetState == target.StateNormal) ||
 						// is in normal state and had been scraped by other shard with lower head series
@@ -408,13 +409,11 @@ func (c *Coordinator) shardCanBeIdle(src *shardInfo, shards []*shardInfo) bool {
 		}
 	}
 
-	total := 0
 l1:
 	for _, tar := range src.scraping {
 		if tar.TargetState != target.StateNormal || tar.ScrapeTimes < minWaitScrapeTimes {
 			return false
 		}
-		total++
 
 		for i := range spaces {
 			if spaces[i] > tar.Series {
@@ -426,7 +425,7 @@ l1:
 		return false
 	}
 
-	return total != 0
+	return true
 }
 
 func (c *Coordinator) shardBecomeIdle(src *shardInfo, shards []*shardInfo) bool {
