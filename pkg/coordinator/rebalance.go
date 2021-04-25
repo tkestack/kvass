@@ -51,9 +51,10 @@ func newShardInfo(sd *shard.Shard) *shardInfo {
 func (s *shardInfo) totalTargetsSeries() int64 {
 	ret := int64(0)
 	for _, s := range s.scraping {
-		if s.TargetState != target.StateNormal {
+		if s.TargetState != target.StateNormal || s.Health != scrape.HealthGood || s.ScrapeTimes < minWaitScrapeTimes {
 			continue
 		}
+
 		ret += s.Series
 	}
 	return ret
@@ -223,12 +224,13 @@ func (c *Coordinator) alleviateShards(changeAbleShards []*shardInfo) (needSpace 
 
 func (c *Coordinator) alleviateShard(s *shardInfo, changeAbleShards []*shardInfo, expSeries int64) (needSpace int64) {
 	total := s.totalTargetsSeries()
-	if total >= expSeries {
-		c.log.Infof("%s need alleviate", s.shard.ID)
+	if total <= expSeries {
+		return 0
 	}
 
+	c.log.Infof("%s need alleviate", s.shard.ID)
 	for hash, tar := range s.scraping {
-		if total < expSeries {
+		if total <= expSeries {
 			break
 		}
 
@@ -250,7 +252,7 @@ func (c *Coordinator) alleviateShard(s *shardInfo, changeAbleShards []*shardInfo
 		}
 	}
 
-	if total >= expSeries {
+	if total > expSeries {
 		return total - expSeries
 	}
 	return 0
