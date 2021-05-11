@@ -5,6 +5,7 @@ import (
 	"hash/fnv"
 	"net"
 	"net/url"
+	"sort"
 	"strings"
 	"tkestack.io/kvass/pkg/target"
 
@@ -115,6 +116,7 @@ func populateLabels(lset labels.Labels, cfg *config.ScrapeConfig) (res, orig lab
 // targetsFromGroup builds activeTargets based on the given TargetGroup and config.
 func targetsFromGroup(tg *targetgroup.Group, cfg *config.ScrapeConfig) ([]*SDTargets, error) {
 	targets := make([]*SDTargets, 0, len(tg.Targets))
+	exists := map[uint64]bool{}
 
 	for i, tlset := range tg.Targets {
 		lbls := make([]labels.Label, 0, len(tlset)+len(tg.Labels))
@@ -137,11 +139,16 @@ func targetsFromGroup(tg *targetgroup.Group, cfg *config.ScrapeConfig) ([]*SDTar
 
 		if lbls != nil || origLabels != nil {
 			tar := scrape.NewTarget(lbls, origLabels, cfg.Params)
+			hash := targetHash(lbls, tar.URL().String())
+			if exists[hash] {
+				continue
+			}
+			exists[hash] = true
 			targets = append(targets, &SDTargets{
 				Job:        cfg.JobName,
 				PromTarget: tar,
 				ShardTarget: &target.Target{
-					Hash:   targetHash(lbls, tar.URL().String()),
+					Hash:   hash,
 					Labels: supportInvalidLabelName(labelsWithoutConfigParam(lbls, cfg.Params)),
 				},
 			})
@@ -153,6 +160,7 @@ func targetsFromGroup(tg *targetgroup.Group, cfg *config.ScrapeConfig) ([]*SDTar
 func targetHash(lbls labels.Labels, url string) uint64 {
 	h := fnv.New64a()
 	//nolint: errcheck
+	sort.Sort(lbls)
 	_, _ = h.Write([]byte(fmt.Sprintf("%016d", lbls.Hash())))
 	//nolint: errcheck
 	_, _ = h.Write([]byte(url))
