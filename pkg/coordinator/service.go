@@ -18,8 +18,11 @@
 package coordinator
 
 import (
+	"fmt"
+	"regexp"
 	"sort"
 	"tkestack.io/kvass/pkg/shard"
+	"tkestack.io/kvass/pkg/utils/types"
 
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
@@ -89,10 +92,54 @@ func (s *Service) runtimeInfo(ctx *gin.Context) *api.Result {
 	})
 }
 
+// TargetDiscovery has all the active targets.
+type TargetDiscovery struct {
+	// ActiveTargets contains all targets that should be scraped
+	ActiveTargets []*v1.Target `json:"activeTargets"`
+	// ActiveStatistics contains job's statistics number according to target health
+	ActiveStatistics []TargetStatistics `json:"activeStatistics,omitempty"`
+	// DroppedTargets contains all targets that been dropped from relabel
+	DroppedTargets []*v1.DroppedTarget `json:"droppedTargets"`
+}
+
+// TargetStatistics contains statistics number according to target health
+type TargetStatistics struct {
+	// JobName is the job name of this statistics
+	JobName string
+	// Total is all active targets number
+	Total uint64
+	// Health contains the number of every health status
+	Health map[scrape.TargetHealth]uint64
+}
+
 // targets compatible of prometheus Service /api/v1/targets
 // targets combines targets information from service discovery, sidecar and exploring
+// we support some extend query param:
+// - state: (compatible)
+// - statistics: "only" (return statistics only), "with" (return statistics and targets list)
+// - job: "job_name" (return active targets with specific job_name, regexp is supported)
+// - health: "up", "down", "unknown" (return active targets with specific health status)
 func (s *Service) targets(ctx *gin.Context) *api.Result {
-	state := ctx.Query("state")
+	var (
+		state      = ctx.Query("state")
+		statistics = ctx.Query("statistics")
+		jobs       = ctx.QueryArray("job")
+		health     = ctx.QueryArray("health")
+		jobRexg    []*regexp.Regexp
+	)
+
+	if statistics != "" && statistics != "only" && statistics != "with" {
+		return api.BadDataErr(fmt.Errorf("wrong param values statistics"), "")
+	}
+
+	for _, j := range jobs {
+		comp, err := regexp.Compile(j)
+		if err != nil {
+			return api.BadDataErr(fmt.Errorf("wrong format of job"), "")
+		}
+		jobRexg = append(jobRexg, comp)
+	}
+
 	sortKeys := func(targets map[string][]*discovery.SDTargets) ([]string, int) {
 		var n int
 		keys := make([]string, 0, len(targets))
@@ -117,15 +164,33 @@ func (s *Service) targets(ctx *gin.Context) *api.Result {
 
 	showActive := state == "" || state == "any" || state == "active"
 	showDropped := state == "" || state == "any" || state == "dropped"
-	res := &v1.TargetDiscovery{}
+	res := &TargetDiscovery{}
 
-	if showActive {
+	if showActive || statistics != "" {
 		activeTargets := s.getActiveTargets()
 		activeKeys, numTargets := sortKeys(activeTargets)
 		res.ActiveTargets = make([]*v1.Target, 0, numTargets)
 		status := s.getScrapeStatus()
 
+		sts := make([]TargetStatistics, 0)
 		for _, key := range activeKeys {
+			ok := false
+			for _, job := range jobRexg {
+				if job.MatchString(key) {
+					ok = true
+					break
+				}
+			}
+
+			if len(jobRexg) != 0 && !ok {
+				continue
+			}
+
+			jobSts := TargetStatistics{
+				JobName: key,
+				Health:  map[scrape.TargetHealth]uint64{},
+			}
+
 			for _, t := range activeTargets[key] {
 				tar := t.PromTarget
 				hash := t.ShardTarget.Hash
@@ -133,7 +198,12 @@ func (s *Service) targets(ctx *gin.Context) *api.Result {
 				if rt == nil {
 					rt = target.NewScrapeStatus(0)
 				}
+				jobSts.Total++
+				jobSts.Health[rt.Health]++
 
+				if len(health) != 0 && !types.FindString(string(rt.Health), health...) {
+					continue
+				}
 				res.ActiveTargets = append(res.ActiveTargets, &v1.Target{
 					DiscoveredLabels:   tar.DiscoveredLabels().Map(),
 					Labels:             tar.Labels().Map(),
@@ -146,11 +216,20 @@ func (s *Service) targets(ctx *gin.Context) *api.Result {
 					Health:             rt.Health,
 				})
 			}
+
+			sts = append(sts, jobSts)
 		}
-	} else {
+
+		if statistics != "" {
+			res.ActiveStatistics = sts
+		}
+	}
+
+	if !showActive || statistics == "only" {
 		res.ActiveTargets = []*v1.Target{}
 	}
-	if showDropped {
+
+	if showDropped && statistics != "only" {
 		tDropped := flatten(s.getDropTargets())
 		res.DroppedTargets = make([]*v1.DroppedTarget, 0, len(tDropped))
 		for _, t := range tDropped {

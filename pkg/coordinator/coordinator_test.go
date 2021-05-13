@@ -277,7 +277,9 @@ func TestCoordinator_RunOnce(t *testing.T) {
 						},
 						targetStatus: map[uint64]*target.ScrapeStatus{
 							1: {
-								Series: 100,
+								Series:      100,
+								Health:      scrape.HealthGood,
+								ScrapeTimes: minWaitScrapeTimes,
 							},
 						},
 						wantTargets: shard.UpdateTargetsRequest{

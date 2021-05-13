@@ -21,7 +21,6 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/scrape"
-	v1 "github.com/prometheus/prometheus/web/api/v1"
 	"github.com/sirupsen/logrus"
 	"net/http"
 	"net/url"
@@ -30,18 +29,10 @@ import (
 	"tkestack.io/kvass/pkg/discovery"
 	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/target"
+	"tkestack.io/kvass/pkg/utils/test"
 )
 
 func TestAPI_Targets(t *testing.T) {
-	getScrapeStatus := func() map[uint64]*target.ScrapeStatus {
-		return map[uint64]*target.ScrapeStatus{
-			1: {
-				Health:    scrape.HealthBad,
-				LastError: "test",
-			},
-		}
-	}
-
 	lbs := labels.Labels{
 		{
 			Name:  model.AddressLabel,
@@ -53,9 +44,28 @@ func TestAPI_Targets(t *testing.T) {
 		},
 	}
 
+	getDrop := func() map[string][]*discovery.SDTargets {
+		return map[string][]*discovery.SDTargets{
+			"job1": {
+				{
+					PromTarget: scrape.NewTarget(lbs, lbs, url.Values{}),
+				},
+			},
+		}
+	}
+
+	getScrapeStatus := func() map[uint64]*target.ScrapeStatus {
+		return map[uint64]*target.ScrapeStatus{
+			1: {
+				Health:    scrape.HealthBad,
+				LastError: "test",
+			},
+		}
+	}
+
 	getActive := func() map[string][]*discovery.SDTargets {
 		return map[string][]*discovery.SDTargets{
-			"j1": {
+			"job1": {
 				{
 					ShardTarget: &target.Target{
 						Hash:   1,
@@ -67,22 +77,155 @@ func TestAPI_Targets(t *testing.T) {
 			},
 		}
 	}
-	getDrop := func() map[string][]*discovery.SDTargets {
-		return map[string][]*discovery.SDTargets{
-			"j1": {
+
+	var cases = []struct {
+		name           string
+		param          url.Values
+		wantActive     int
+		wantDropped    int
+		wantStatistics []TargetStatistics
+	}{
+		{
+			name:        "(state=): return all targets only",
+			wantActive:  1,
+			wantDropped: 1,
+		},
+		{
+			name: "(state=any): return all targets",
+			param: url.Values{
+				"state": []string{"any"},
+			},
+			wantActive:  1,
+			wantDropped: 1,
+		},
+		{
+			name: "(state=active): return active targets only",
+			param: url.Values{
+				"state": []string{"active"},
+			},
+			wantActive:  1,
+			wantDropped: 0,
+		},
+		{
+			name: "(state=dropped): return dropped targets only",
+			param: url.Values{
+				"state": []string{"dropped"},
+			},
+			wantActive:  0,
+			wantDropped: 1,
+		},
+		{
+			name: "(statistics=only): return statistics only",
+			param: url.Values{
+				"statistics": []string{"only"},
+			},
+			wantActive:  0,
+			wantDropped: 0,
+			wantStatistics: []TargetStatistics{
 				{
-					PromTarget: scrape.NewTarget(lbs, lbs, url.Values{}),
+					JobName: "job1",
+					Total:   1,
+					Health: map[scrape.TargetHealth]uint64{
+						scrape.HealthBad: 1,
+					},
 				},
 			},
-		}
+		},
+		{
+			name: "(statistics=with): return statistics and all targets",
+			param: url.Values{
+				"statistics": []string{"with"},
+			},
+			wantActive:  1,
+			wantDropped: 1,
+			wantStatistics: []TargetStatistics{
+				{
+					JobName: "job1",
+					Total:   1,
+					Health: map[scrape.TargetHealth]uint64{
+						scrape.HealthBad: 1,
+					},
+				},
+			},
+		},
+		{
+			name: "(statistics=with,state=active): return statistics and active targets",
+			param: url.Values{
+				"statistics": []string{"with"},
+				"state":      []string{"active"},
+			},
+			wantActive:  1,
+			wantDropped: 0,
+			wantStatistics: []TargetStatistics{
+				{
+					JobName: "job1",
+					Total:   1,
+					Health: map[scrape.TargetHealth]uint64{
+						scrape.HealthBad: 1,
+					},
+				},
+			},
+		},
+		{
+			name: "(job=job.*,state=active): return targets with job_name",
+			param: url.Values{
+				"job":   []string{"job.*"},
+				"state": []string{"active"},
+			},
+			wantActive:  1,
+			wantDropped: 0,
+		},
+		{
+			name: "(job=xx,state=active): not targets returned with wrong job_name",
+			param: url.Values{
+				"job":   []string{"xx"},
+				"state": []string{"active"},
+			},
+			wantActive:  0,
+			wantDropped: 0,
+		},
+		{
+			name: "(health=down,state=active): return targets with special health",
+			param: url.Values{
+				"health": []string{"down"},
+				"state":  []string{"active"},
+			},
+			wantActive:  1,
+			wantDropped: 0,
+		},
+		{
+			name: "(health=down,up,state=active): return targets with muti special health",
+			param: url.Values{
+				"health": []string{"down", "up"},
+				"state":  []string{"active"},
+			},
+			wantActive:  1,
+			wantDropped: 0,
+		},
+		{
+			name: "(health=up,state=active): not targets returned with wrong health",
+			param: url.Values{
+				"health": []string{"up"},
+				"state":  []string{"active"},
+			},
+			wantActive:  0,
+			wantDropped: 0,
+		},
+	}
+	for _, cs := range cases {
+		t.Run(cs.name, func(t *testing.T) {
+			a := NewService(prom.NewConfigManager("", logrus.New()), getScrapeStatus, getActive, getDrop, logrus.New())
+			uri := "/api/v1/targets"
+			if len(cs.param) != 0 {
+				uri += "?" + cs.param.Encode()
+			}
+
+			res := &TargetDiscovery{}
+			r := api.TestCall(t, a.Engine.ServeHTTP, uri, http.MethodGet, "", res)
+			r.Equal(cs.wantActive, len(res.ActiveTargets))
+			r.Equal(cs.wantDropped, len(res.DroppedTargets))
+			r.JSONEq(test.MustJSON(cs.wantStatistics), test.MustJSON(res.ActiveStatistics))
+		})
 	}
 
-	a := NewService(prom.NewConfigManager("", logrus.New()), getScrapeStatus, getActive, getDrop, logrus.New())
-	res := &v1.TargetDiscovery{}
-	r := api.TestCall(t, a.Engine.ServeHTTP, "/api/v1/targets", http.MethodGet, "", res)
-	r.Equal("http://127.0.0.1:80", res.ActiveTargets[0].ScrapeURL)
-	r.Equal("j1", res.ActiveTargets[0].ScrapePool)
-	r.Equal(scrape.HealthBad, res.ActiveTargets[0].Health)
-	r.Equal("test", res.ActiveTargets[0].LastError)
-	r.NotEmpty(res.DroppedTargets)
 }

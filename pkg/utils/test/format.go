@@ -24,6 +24,9 @@ import (
 
 // MustJSON marshal obj to json string, a panic will be thrown if marshal failed
 func MustJSON(obj interface{}) string {
+	if obj == nil {
+		return ""
+	}
 	data, err := json.Marshal(obj)
 	if err != nil {
 		panic(err)
