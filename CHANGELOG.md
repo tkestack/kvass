@@ -1,4 +1,14 @@
 
+## [v0.1.3] - 2021-05-18
+### Feat
+- add "statistics" result of coordinator api about /api/targets
+
+### Fix
+- unexpect scaling up when some targets is too big during shard alleviation
+- sidecar proxy http request report "use of closed network connection"
+- return duplicate target with same hash
+
+
 ## [v0.1.2] - 2021-04-23
 ### Fix
 - empty shard need ensure idle state every coordinate period
