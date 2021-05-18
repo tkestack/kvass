@@ -18,11 +18,11 @@
 package sidecar
 
 import (
+	"github.com/cssivision/reverseproxy"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"tkestack.io/kvass/pkg/api"
 	"tkestack.io/kvass/pkg/prom"
@@ -88,7 +88,7 @@ func (s *Service) ServeHTTP(wt http.ResponseWriter, r *http.Request) {
 	}
 
 	u, _ := url.Parse(s.promURL)
-	httputil.NewSingleHostReverseProxy(u).ServeHTTP(wt, r)
+	reverseproxy.NewReverseProxy(u).ServeHTTP(wt, r)
 }
 
 // Run start Service at "address"

@@ -3,6 +3,7 @@ module tkestack.io/kvass
 go 1.15
 
 require (
+	github.com/cssivision/reverseproxy v0.0.1
 	github.com/gin-contrib/pprof v1.3.0
 	github.com/gin-gonic/gin v1.6.3
 	github.com/go-kit/kit v0.10.0
