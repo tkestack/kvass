@@ -50,12 +50,12 @@ func newShardInfo(sd *shard.Shard) *shardInfo {
 
 func (s *shardInfo) totalTargetsSeries() int64 {
 	ret := int64(0)
-	for _, s := range s.scraping {
-		if s.TargetState != target.StateNormal || s.Health != scrape.HealthGood || s.ScrapeTimes < minWaitScrapeTimes {
+	for _, tar := range s.scraping {
+		if tar.TargetState != target.StateNormal || tar.Health != scrape.HealthGood || tar.ScrapeTimes < minWaitScrapeTimes {
 			continue
 		}
 
-		ret += s.Series
+		ret += tar.Series
 	}
 	return ret
 }
@@ -236,6 +236,11 @@ func (c *Coordinator) alleviateShard(s *shardInfo, changeAbleShards []*shardInfo
 
 		if tar.TargetState != target.StateNormal || tar.Health != scrape.HealthGood || tar.ScrapeTimes < minWaitScrapeTimes {
 			continue
+		}
+
+		if tar.Series > c.maxSeries {
+			c.log.Warnf("too big series [%d] series is [%d], skip alleviate", hash, tar.Series)
+			return 0
 		}
 
 		// try transfer target to other shard
