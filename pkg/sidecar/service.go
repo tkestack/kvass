@@ -32,32 +32,32 @@ import (
 
 // Service is the api server of shard
 type Service struct {
-	lg                 logrus.FieldLogger
-	ginEngine          *gin.Engine
-	cfgManager         *prom.ConfigManager
-	targetManager      *TargetsManager
-	promURL            string
-	getPromRuntimeInfo func() (*prom.RuntimeInfo, error)
-	paths              []string
-	runHTTP            func(addr string, handler http.Handler) error
+	lg            logrus.FieldLogger
+	ginEngine     *gin.Engine
+	cfgManager    *prom.ConfigManager
+	targetManager *TargetsManager
+	promURL       string
+	getHeadSeries func() (int64, error)
+	paths         []string
+	runHTTP       func(addr string, handler http.Handler) error
 }
 
 // NewService create new api server of shard
 func NewService(
 	promURL string,
-	getPromRuntimeInfo func() (*prom.RuntimeInfo, error),
+	getHeadSeries func() (int64, error),
 	cfgManager *prom.ConfigManager,
 	targetManager *TargetsManager,
 	lg logrus.FieldLogger) *Service {
 
 	s := &Service{
-		promURL:            promURL,
-		ginEngine:          gin.Default(),
-		lg:                 lg,
-		getPromRuntimeInfo: getPromRuntimeInfo,
-		runHTTP:            http.ListenAndServe,
-		cfgManager:         cfgManager,
-		targetManager:      targetManager,
+		promURL:       promURL,
+		ginEngine:     gin.Default(),
+		lg:            lg,
+		getHeadSeries: getHeadSeries,
+		runHTTP:       http.ListenAndServe,
+		cfgManager:    cfgManager,
+		targetManager: targetManager,
 	}
 
 	pprof.Register(s.ginEngine)
@@ -97,7 +97,7 @@ func (s *Service) Run(address string) error {
 }
 
 func (s *Service) runtimeInfo(g *gin.Context) *api.Result {
-	r, err := s.getPromRuntimeInfo()
+	series, err := s.getHeadSeries()
 	if err != nil {
 		return api.InternalErr(err, "get runtime from prometheus")
 	}
@@ -109,11 +109,11 @@ func (s *Service) runtimeInfo(g *gin.Context) *api.Result {
 		min += r.Series
 	}
 
-	if r.TimeSeriesCount < min {
-		r.TimeSeriesCount = min
+	if series < min {
+		series = min
 	}
 	return api.Data(&shard.RuntimeInfo{
-		HeadSeries:  r.TimeSeriesCount,
+		HeadSeries:  series,
 		ConfigHash:  s.cfgManager.ConfigInfo().ConfigHash,
 		IdleStartAt: targets.IdleAt,
 	})

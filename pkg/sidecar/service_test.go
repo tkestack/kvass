@@ -62,8 +62,8 @@ func TestService_ServeHTTP(t *testing.T) {
 			}))
 			defer tProm.Close()
 
-			a := NewService(tProm.URL, func() (info *prom.RuntimeInfo, e error) {
-				return nil, nil
+			a := NewService(tProm.URL, func() (int64, error) {
+				return int64(0), nil
 			}, prom.NewConfigManager("", logrus.New()), NewTargetsManager("", logrus.New()), logrus.New())
 			a.ginEngine.POST(a.path("/test"), func(context *gin.Context) {})
 
@@ -89,15 +89,15 @@ func TestService_Run(t *testing.T) {
 func TestService_RuntimeInfo(t *testing.T) {
 	cases := []struct {
 		name               string
-		getPromRuntimeInfo func() (*prom.RuntimeInfo, error)
+		getPromRuntimeInfo func() (int64, error)
 		targets            *shard.UpdateTargetsRequest
 		configContent      string
 		wantAPIResult      *api.Result
 	}{
 		{
 			name: "prometheus head series return err",
-			getPromRuntimeInfo: func() (r *prom.RuntimeInfo, e error) {
-				return nil, fmt.Errorf("err")
+			getPromRuntimeInfo: func() (int64, error) {
+				return 0, fmt.Errorf("err")
 			},
 			targets:       &shard.UpdateTargetsRequest{},
 			configContent: "global:",
@@ -105,8 +105,8 @@ func TestService_RuntimeInfo(t *testing.T) {
 		},
 		{
 			name: "prometheus head series < total series of all targets",
-			getPromRuntimeInfo: func() (info *prom.RuntimeInfo, e error) {
-				return &prom.RuntimeInfo{TimeSeriesCount: 1}, nil
+			getPromRuntimeInfo: func() (int64, error) {
+				return 1, nil
 			},
 			targets: &shard.UpdateTargetsRequest{
 				Targets: map[string][]*target.Target{
@@ -134,8 +134,8 @@ scrape_configs:
 		},
 		{
 			name: "prometheus head series > total series of all targets",
-			getPromRuntimeInfo: func() (info *prom.RuntimeInfo, e error) {
-				return &prom.RuntimeInfo{TimeSeriesCount: 100}, nil
+			getPromRuntimeInfo: func() (int64, error) {
+				return 100, nil
 			},
 			targets: &shard.UpdateTargetsRequest{
 				Targets: map[string][]*target.Target{
