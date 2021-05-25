@@ -4,6 +4,7 @@ import (
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"net/url"
 	"os"
@@ -22,7 +23,7 @@ func TestManager(t *testing.T) {
 	cfg.ScrapeTimeout = model.Duration(time.Second)
 	r.NoError(os.Setenv("SCRAPE_PROXY", "http://127.0.0.1:9090"))
 
-	ss := New()
+	ss := New(logrus.New())
 	r.NoError(ss.ApplyConfig(&prom.ConfigInfo{
 		Config: &config.Config{
 			ScrapeConfigs: []*config.ScrapeConfig{cfg},
