@@ -1,4 +1,14 @@
 
+## [v0.1.4] - 2021-05-25
+### Feat
+- coordinator skip upgrading statefulsets
+
+### Fix
+- log format
+- some unit test
+- use /api/v1/status/tsdb to get head series
+
+
 ## [v0.1.3] - 2021-05-18
 ### Feat
 - add "statistics" result of coordinator api about /api/targets
@@ -7,6 +17,7 @@
 - unexpect scaling up when some targets is too big during shard alleviation
 - sidecar proxy http request report "use of closed network connection"
 - return duplicate target with same hash
+- alleviateShards
 
 
 ## [v0.1.2] - 2021-04-23
