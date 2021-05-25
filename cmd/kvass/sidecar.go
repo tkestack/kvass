@@ -67,7 +67,7 @@ var sidecarCmd = &cobra.Command{
 		}
 		var (
 			lg            = log.New()
-			scrapeManager = scrape.New()
+			scrapeManager = scrape.New(log.WithField("component", "scrape manager"))
 			configManager = prom.NewConfigManager(sidecarCfg.configFile, log.WithField("component", "config manager"))
 			targetManager = sidecar.NewTargetsManager(sidecarCfg.storePath, log.WithField("component", "targets manager"))
 
@@ -103,7 +103,13 @@ var sidecarCmd = &cobra.Command{
 
 		service := sidecar.NewService(
 			sidecarCfg.prometheusURL,
-			promCli.RuntimeInfo,
+			func() (i int64, e error) {
+				ts, err := promCli.TSDBInfo()
+				if err != nil {
+					return 0, err
+				}
+				return ts.HeadStats.NumSeries, nil
+			},
 			configManager,
 			targetManager,
 			log.WithField("component", "web"),

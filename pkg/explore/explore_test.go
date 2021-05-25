@@ -37,7 +37,7 @@ import (
 )
 
 func TestExplore_UpdateTargets(t *testing.T) {
-	e := New(scrape.New(), logrus.New())
+	e := New(scrape.New(logrus.New()), logrus.New())
 	require.Nil(t, e.Get(1))
 	e.UpdateTargets(map[string][]*discovery.SDTargets{
 		"job1": {&discovery.SDTargets{
@@ -54,7 +54,7 @@ func TestExplore_UpdateTargets(t *testing.T) {
 
 func TestExplore_Run(t *testing.T) {
 	r := require.New(t)
-	sm := scrape.New()
+	sm := scrape.New(logrus.New())
 	r.NoError(sm.ApplyConfig(&prom.ConfigInfo{
 		RawContent: nil,
 		ConfigHash: "",
@@ -121,7 +121,7 @@ func TestExplore_Run(t *testing.T) {
 
 func TestExplore_ApplyConfig(t *testing.T) {
 	r := require.New(t)
-	e := New(scrape.New(), logrus.New())
+	e := New(scrape.New(logrus.New()), logrus.New())
 	e.UpdateTargets(map[string][]*discovery.SDTargets{
 		"job1": {&discovery.SDTargets{
 			ShardTarget: &target.Target{

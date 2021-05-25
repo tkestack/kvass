@@ -1,18 +1,20 @@
 package scrape
 
 import (
-	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"tkestack.io/kvass/pkg/prom"
 )
 
 // Manager includes all jobs
 type Manager struct {
 	jobs map[string]*JobInfo
+	lg   logrus.FieldLogger
 }
 
 // New create a Manager with specified Cli set
-func New() *Manager {
+func New(lg logrus.FieldLogger) *Manager {
 	return &Manager{
+		lg:   lg,
 		jobs: map[string]*JobInfo{},
 	}
 }
@@ -23,7 +25,8 @@ func (s *Manager) ApplyConfig(cfg *prom.ConfigInfo) error {
 	for _, cfg := range cfg.Config.ScrapeConfigs {
 		info, err := newJobInfo(*cfg)
 		if err != nil {
-			return errors.Wrap(err, cfg.JobName)
+			s.lg.Error(err.Error())
+			continue
 		}
 		ret[cfg.JobName] = info
 	}
