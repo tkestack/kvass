@@ -35,11 +35,10 @@ func NewClient(url string) *Client {
 	}
 }
 
-// RuntimeInfo return the current status of this shard, only return tManager targets if scrapingOnly is true,
-// otherwise ,all target this cli discovered will be returned
-func (c *Client) RuntimeInfo() (*RuntimeInfo, error) {
-	ret := &RuntimeInfo{}
-	return ret, api.Get(c.url+"/api/v1/status/runtimeinfo", ret)
+// TSDBInfo return the current head status of this shard
+func (c *Client) TSDBInfo() (*TSDBInfo, error) {
+	ret := &TSDBInfo{}
+	return ret, api.Get(c.url+"/api/v1/status/tsdb", ret)
 }
 
 // Targets is compatible with prometheusURL /api/v1/targets

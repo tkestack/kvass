@@ -76,7 +76,7 @@ func (g *ReplicasManager) Replicas() ([]shard.Manager, error) {
 			continue
 		}
 
-		if g.stsUpdatedTime[s.Name] == nil {
+		if s.Status.ReadyReplicas != s.Status.Replicas && g.stsUpdatedTime[s.Name] == nil {
 			t := time.Now()
 			g.lg.Warnf("Statefulset %s is not ready, try wait 2m", s.Name)
 			g.stsUpdatedTime[s.Name] = &t

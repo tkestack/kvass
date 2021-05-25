@@ -103,7 +103,13 @@ var sidecarCmd = &cobra.Command{
 
 		service := sidecar.NewService(
 			sidecarCfg.prometheusURL,
-			promCli.RuntimeInfo,
+			func() (i int64, e error) {
+				ts, err := promCli.TSDBInfo()
+				if err != nil {
+					return 0, err
+				}
+				return ts.HeadStats.NumSeries, nil
+			},
 			configManager,
 			targetManager,
 			log.WithField("component", "web"),

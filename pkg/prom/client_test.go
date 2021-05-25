@@ -31,18 +31,20 @@ func dataServer(data string) *httptest.Server {
 	}))
 }
 
-func TestClient_RuntimeInfo(t *testing.T) {
+func TestClient_TSDBInfo(t *testing.T) {
 	w := dataServer(`{
   "status": "success",
   "data": {
-    "timeSeriesCount": 5
-  }
+    "headStats": {
+       "numSeries": 508
+     }
+    }
 }`)
 	defer w.Close()
 	c := NewClient(w.URL)
-	r, err := c.RuntimeInfo()
+	r, err := c.TSDBInfo()
 	require.NoError(t, err)
-	require.Equal(t, int64(5), r.TimeSeriesCount)
+	require.Equal(t, int64(508), r.HeadStats.NumSeries)
 }
 
 func TestClient_ConfigReload(t *testing.T) {
