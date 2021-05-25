@@ -213,6 +213,7 @@ func (c *Coordinator) alleviateShards(changeAbleShards []*shardInfo) (needSpace 
 	for _, s := range changeAbleShards {
 		for _, t := range threshold {
 			if s.runtime.HeadSeries >= seriesWithRate(c.maxSeries, t.maxSeriesRate) {
+				c.log.Infof("%s series is %d, over rate %d", s.shard.ID, s.runtime.HeadSeries, t.maxSeriesRate)
 				needSpace += c.alleviateShard(s, changeAbleShards, seriesWithRate(c.maxSeries, t.expectSeriesRate))
 				break
 			}

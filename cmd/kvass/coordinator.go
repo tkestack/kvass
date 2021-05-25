@@ -117,7 +117,7 @@ distribution targets to shards`,
 				Format: format,
 			})
 
-			scrapeManager          = scrape.New()
+			scrapeManager          = scrape.New(lg.WithField("component", "scrape discovery"))
 			discoveryManagerScrape = prom_discovery.NewManager(context.Background(), log.With(logger, "component", "discovery manager scrape"), prom_discovery.Name("scrape"))
 			targetDiscovery        = discovery.New(lg.WithField("component", "target discovery"))
 			exp                    = explore.New(scrapeManager, lg.WithField("component", "explore"))

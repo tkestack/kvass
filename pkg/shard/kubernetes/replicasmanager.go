@@ -24,6 +24,7 @@ import (
 	v1 "k8s.io/api/apps/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"time"
 	"tkestack.io/kvass/pkg/shard"
 )
 
@@ -34,6 +35,7 @@ type ReplicasManager struct {
 	cli             kubernetes.Interface
 	lg              logrus.FieldLogger
 	getStatefulSets func() (list *v1.StatefulSetList, e error)
+	stsUpdatedTime  map[string]*time.Time
 }
 
 // NewReplicasManager create a ReplicasManager
@@ -55,6 +57,7 @@ func NewReplicasManager(
 				LabelSelector: stsSelector,
 			})
 		},
+		stsUpdatedTime: map[string]*time.Time{},
 	}
 }
 
@@ -67,6 +70,24 @@ func (g *ReplicasManager) Replicas() ([]shard.Manager, error) {
 
 	ret := make([]shard.Manager, 0)
 	for _, s := range sts.Items {
+		if s.Status.Replicas != s.Status.UpdatedReplicas {
+			g.lg.Warnf("Statefulset %s UpdatedReplicas != Replicas, skipped", s.Name)
+			g.stsUpdatedTime[s.Name] = nil
+			continue
+		}
+
+		if g.stsUpdatedTime[s.Name] == nil {
+			t := time.Now()
+			g.lg.Warnf("Statefulset %s is not ready, try wait 2m", s.Name)
+			g.stsUpdatedTime[s.Name] = &t
+		}
+
+		t := g.stsUpdatedTime[s.Name]
+		if s.Status.ReadyReplicas != s.Status.Replicas && time.Now().Sub(*t) < time.Minute*2 {
+			g.lg.Warnf("Statefulset %s is not ready, still waiting", s.Name)
+			continue
+		}
+
 		tempS := s
 		ret = append(ret, newShardManager(g.cli, &tempS, g.port, g.deletePVC, g.lg.WithField("sts", s.Name)))
 	}
