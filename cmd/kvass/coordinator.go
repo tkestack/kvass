@@ -232,42 +232,49 @@ func configInject(cfg *config.Config, option *configInjectOption) error {
 		for _, sd := range job.ServiceDiscoveryConfigs {
 			ksd, ok := sd.(*k8sd.SDConfig)
 			if ok {
-				if ksd.APIServer.URL != nil {
-					continue
-				}
-
-				if option.kubernetes.url != "" {
-					u, _ := url.Parse(option.kubernetes.url)
-					ksd.APIServer = config_util.URL{URL: u}
-				}
-
-				if option.kubernetes.proxy != "" {
-					u, _ := url.Parse(option.kubernetes.proxy)
-					ksd.HTTPClientConfig.ProxyURL = config_util.URL{URL: u}
-				}
-
-				if option.kubernetes.serviceAccountPath != "" {
-					if ksd.HTTPClientConfig.TLSConfig.CAFile == "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" ||
-						ksd.HTTPClientConfig.TLSConfig.CAFile == "" {
-						ksd.HTTPClientConfig.TLSConfig.CAFile = path.Join(option.kubernetes.serviceAccountPath, "ca.crt")
-					}
-					if ksd.HTTPClientConfig.BearerTokenFile == "/var/run/secrets/kubernetes.io/serviceaccount/token" ||
-						ksd.HTTPClientConfig.BearerTokenFile == "" {
-						ksd.HTTPClientConfig.BearerTokenFile = path.Join(option.kubernetes.serviceAccountPath, "token")
-					}
-				}
+				configInjectK8s(ksd, option)
 			}
 		}
-
-		if option.kubernetes.serviceAccountPath != "" {
-			if job.HTTPClientConfig.TLSConfig.CAFile == "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" {
-				job.HTTPClientConfig.TLSConfig.CAFile = path.Join(option.kubernetes.serviceAccountPath, "ca.crt")
-			}
-
-			if job.HTTPClientConfig.BearerTokenFile == "" || job.HTTPClientConfig.BearerTokenFile == "/var/run/secrets/kubernetes.io/serviceaccount/token" {
-				job.HTTPClientConfig.BearerTokenFile = path.Join(option.kubernetes.serviceAccountPath, "token")
-			}
-		}
+		configInjectServiceAccount(job, option)
 	}
 	return nil
+}
+
+func configInjectK8s(ksd *k8sd.SDConfig, option *configInjectOption) {
+	if ksd.APIServer.URL != nil {
+		return
+	}
+
+	if option.kubernetes.url != "" {
+		u, _ := url.Parse(option.kubernetes.url)
+		ksd.APIServer = config_util.URL{URL: u}
+	}
+
+	if option.kubernetes.proxy != "" {
+		u, _ := url.Parse(option.kubernetes.proxy)
+		ksd.HTTPClientConfig.ProxyURL = config_util.URL{URL: u}
+	}
+
+	if option.kubernetes.serviceAccountPath != "" {
+		if ksd.HTTPClientConfig.TLSConfig.CAFile == "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" ||
+			ksd.HTTPClientConfig.TLSConfig.CAFile == "" {
+			ksd.HTTPClientConfig.TLSConfig.CAFile = path.Join(option.kubernetes.serviceAccountPath, "ca.crt")
+		}
+		if ksd.HTTPClientConfig.BearerTokenFile == "/var/run/secrets/kubernetes.io/serviceaccount/token" ||
+			ksd.HTTPClientConfig.BearerTokenFile == "" {
+			ksd.HTTPClientConfig.BearerTokenFile = path.Join(option.kubernetes.serviceAccountPath, "token")
+		}
+	}
+}
+
+func configInjectServiceAccount(job *config.ScrapeConfig, option *configInjectOption) {
+	if option.kubernetes.serviceAccountPath != "" {
+		if job.HTTPClientConfig.TLSConfig.CAFile == "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" {
+			job.HTTPClientConfig.TLSConfig.CAFile = path.Join(option.kubernetes.serviceAccountPath, "ca.crt")
+		}
+
+		if job.HTTPClientConfig.BearerTokenFile == "" || job.HTTPClientConfig.BearerTokenFile == "/var/run/secrets/kubernetes.io/serviceaccount/token" {
+			job.HTTPClientConfig.BearerTokenFile = path.Join(option.kubernetes.serviceAccountPath, "token")
+		}
+	}
 }

@@ -125,7 +125,7 @@ func (s *Service) targets(ctx *gin.Context) *api.Result {
 		statistics = ctx.Query("statistics")
 		jobs       = ctx.QueryArray("job")
 		health     = ctx.QueryArray("health")
-		jobRexg    []*regexp.Regexp
+		jobRegexp  []*regexp.Regexp
 	)
 
 	if statistics != "" && statistics != "only" && statistics != "with" {
@@ -137,91 +137,21 @@ func (s *Service) targets(ctx *gin.Context) *api.Result {
 		if err != nil {
 			return api.BadDataErr(fmt.Errorf("wrong format of job"), "")
 		}
-		jobRexg = append(jobRexg, comp)
+		jobRegexp = append(jobRegexp, comp)
 	}
 
-	sortKeys := func(targets map[string][]*discovery.SDTargets) ([]string, int) {
-		var n int
-		keys := make([]string, 0, len(targets))
-		for k := range targets {
-			keys = append(keys, k)
-			n += len(targets[k])
-		}
-		sort.Strings(keys)
-		return keys, n
-	}
+	return api.Data(s.getTargets(state, statistics, health, jobRegexp))
+}
 
-	flatten := func(targets map[string][]*discovery.SDTargets) []*scrape.Target {
-		keys, n := sortKeys(targets)
-		res := make([]*scrape.Target, 0, n)
-		for _, k := range keys {
-			for _, t := range targets[k] {
-				res = append(res, t.PromTarget)
-			}
-		}
-		return res
-	}
-
+func (s *Service) getTargets(state string, statistics string, health []string, jobRegexp []*regexp.Regexp) *TargetDiscovery {
 	showActive := state == "" || state == "any" || state == "active"
 	showDropped := state == "" || state == "any" || state == "dropped"
 	res := &TargetDiscovery{}
 
 	if showActive || statistics != "" {
-		activeTargets := s.getActiveTargets()
-		activeKeys, numTargets := sortKeys(activeTargets)
-		res.ActiveTargets = make([]*v1.Target, 0, numTargets)
-		status := s.getScrapeStatus()
-
-		sts := make([]TargetStatistics, 0)
-		for _, key := range activeKeys {
-			ok := false
-			for _, job := range jobRexg {
-				if job.MatchString(key) {
-					ok = true
-					break
-				}
-			}
-
-			if len(jobRexg) != 0 && !ok {
-				continue
-			}
-
-			jobSts := TargetStatistics{
-				JobName: key,
-				Health:  map[scrape.TargetHealth]uint64{},
-			}
-
-			for _, t := range activeTargets[key] {
-				tar := t.PromTarget
-				hash := t.ShardTarget.Hash
-				rt := status[hash]
-				if rt == nil {
-					rt = target.NewScrapeStatus(0)
-				}
-				jobSts.Total++
-				jobSts.Health[rt.Health]++
-
-				if len(health) != 0 && !types.FindString(string(rt.Health), health...) {
-					continue
-				}
-				res.ActiveTargets = append(res.ActiveTargets, &v1.Target{
-					DiscoveredLabels:   tar.DiscoveredLabels().Map(),
-					Labels:             tar.Labels().Map(),
-					ScrapePool:         key,
-					ScrapeURL:          tar.URL().String(),
-					GlobalURL:          tar.URL().String(),
-					LastError:          rt.LastError,
-					LastScrape:         rt.LastScrape,
-					LastScrapeDuration: rt.LastScrapeDuration,
-					Health:             rt.Health,
-				})
-			}
-
-			sts = append(sts, jobSts)
-		}
-
-		if statistics != "" {
-			res.ActiveStatistics = sts
+		res.ActiveTargets, res.ActiveStatistics = s.statisticActiveTargets(jobRegexp, health)
+		if statistics == "" {
+			res.ActiveStatistics = []TargetStatistics{}
 		}
 	}
 
@@ -240,6 +170,88 @@ func (s *Service) targets(ctx *gin.Context) *api.Result {
 	} else {
 		res.DroppedTargets = []*v1.DroppedTarget{}
 	}
+	return res
+}
 
-	return api.Data(res)
+func (s *Service) statisticActiveTargets(jobRegexp []*regexp.Regexp, health []string) ([]*v1.Target, []TargetStatistics) {
+	sts := make([]TargetStatistics, 0)
+	status := s.getScrapeStatus()
+	activeTargets := s.getActiveTargets()
+	activeKeys, numTargets := sortKeys(activeTargets)
+	targets := make([]*v1.Target, 0, numTargets)
+	for _, jobName := range activeKeys {
+		if filterJobName(jobName, jobRegexp) {
+			continue
+		}
+
+		jobSts := TargetStatistics{
+			JobName: jobName,
+			Health:  map[scrape.TargetHealth]uint64{},
+		}
+
+		for _, t := range activeTargets[jobName] {
+			rt := status[t.ShardTarget.Hash]
+			if rt == nil {
+				rt = target.NewScrapeStatus(0)
+			}
+			jobSts.Total++
+			jobSts.Health[rt.Health]++
+
+			if len(health) != 0 && !types.FindString(string(rt.Health), health...) {
+				continue
+			}
+			targets = append(targets, makeTarget(jobName, t.PromTarget, rt))
+		}
+
+		sts = append(sts, jobSts)
+	}
+	return targets, sts
+}
+
+func sortKeys(targets map[string][]*discovery.SDTargets) ([]string, int) {
+	var n int
+	keys := make([]string, 0, len(targets))
+	for k := range targets {
+		keys = append(keys, k)
+		n += len(targets[k])
+	}
+	sort.Strings(keys)
+	return keys, n
+}
+
+func flatten(targets map[string][]*discovery.SDTargets) []*scrape.Target {
+	keys, n := sortKeys(targets)
+	res := make([]*scrape.Target, 0, n)
+	for _, k := range keys {
+		for _, t := range targets[k] {
+			res = append(res, t.PromTarget)
+		}
+	}
+	return res
+}
+
+func makeTarget(jobName string, target *scrape.Target, rt *target.ScrapeStatus) *v1.Target {
+	return &v1.Target{
+		DiscoveredLabels:   target.DiscoveredLabels().Map(),
+		Labels:             target.Labels().Map(),
+		ScrapePool:         jobName,
+		ScrapeURL:          target.URL().String(),
+		GlobalURL:          target.URL().String(),
+		LastError:          rt.LastError,
+		LastScrape:         rt.LastScrape,
+		LastScrapeDuration: rt.LastScrapeDuration,
+		Health:             rt.Health,
+	}
+}
+
+func filterJobName(jobName string, jobRegexp []*regexp.Regexp) bool {
+	ok := false
+	for _, job := range jobRegexp {
+		if job.MatchString(jobName) {
+			ok = true
+			break
+		}
+	}
+
+	return len(jobRegexp) != 0 && !ok
 }

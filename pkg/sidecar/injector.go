@@ -89,18 +89,7 @@ func (i *Injector) ApplyConfig(cfg *prom.ConfigInfo) error {
 	return i.inject()
 }
 
-func (i *Injector) inject() error {
-	i.Lock()
-	defer i.Unlock()
-
-	cfg := &config.Config{}
-	if err := yaml.Unmarshal(i.curCfg.RawContent, &cfg); err != nil {
-		return err
-	}
-
-	bTokens := make([]string, 0)
-	password := make([]string, 0)
-
+func (i *Injector) injectJobs(cfg *config.Config) error {
 	for _, job := range cfg.ScrapeConfigs {
 		if i.option.ProxyURL != "" {
 			u, err := url.Parse(i.option.ProxyURL)
@@ -133,26 +122,10 @@ func (i *Injector) inject() error {
 		}
 	}
 
-	for _, w := range cfg.RemoteWriteConfigs {
-		if w.HTTPClientConfig.BearerToken != "" {
-			bTokens = append(bTokens, string(w.HTTPClientConfig.BearerToken))
-		}
+	return nil
+}
 
-		if w.HTTPClientConfig.BasicAuth != nil && w.HTTPClientConfig.BasicAuth.Password != "" {
-			password = append(password, string(w.HTTPClientConfig.BasicAuth.Password))
-		}
-
-	}
-
-	for _, w := range cfg.RemoteReadConfigs {
-		if w.HTTPClientConfig.BearerToken != "" {
-			bTokens = append(bTokens, string(w.HTTPClientConfig.BearerToken))
-		}
-
-		if w.HTTPClientConfig.BasicAuth != nil && w.HTTPClientConfig.BasicAuth.Password != "" {
-			password = append(password, string(w.HTTPClientConfig.BasicAuth.Password))
-		}
-	}
+func (i *Injector) injectSelfMonitor(cfg *config.Config) {
 	if i.option.PrometheusURL != "" {
 		u, _ := url.Parse(i.option.PrometheusURL)
 		podName := os.Getenv("POD_NAME")
@@ -180,10 +153,36 @@ func (i *Injector) inject() error {
 				}),
 			}})
 	}
+}
+
+func (i *Injector) marshal(cfg *config.Config) ([]byte, error) {
+	bTokens := make([]string, 0)
+	password := make([]string, 0)
+
+	for _, w := range cfg.RemoteWriteConfigs {
+		if w.HTTPClientConfig.BearerToken != "" {
+			bTokens = append(bTokens, string(w.HTTPClientConfig.BearerToken))
+		}
+
+		if w.HTTPClientConfig.BasicAuth != nil && w.HTTPClientConfig.BasicAuth.Password != "" {
+			password = append(password, string(w.HTTPClientConfig.BasicAuth.Password))
+		}
+
+	}
+
+	for _, w := range cfg.RemoteReadConfigs {
+		if w.HTTPClientConfig.BearerToken != "" {
+			bTokens = append(bTokens, string(w.HTTPClientConfig.BearerToken))
+		}
+
+		if w.HTTPClientConfig.BasicAuth != nil && w.HTTPClientConfig.BasicAuth.Password != "" {
+			password = append(password, string(w.HTTPClientConfig.BasicAuth.Password))
+		}
+	}
 
 	gen, err := yaml.Marshal(&cfg)
 	if err != nil {
-		return errors.Wrapf(err, "marshal config failed")
+		return nil, errors.Wrapf(err, "marshal config failed")
 	}
 
 	data := string(gen)
@@ -194,8 +193,29 @@ func (i *Injector) inject() error {
 	for _, pd := range password {
 		data = strings.Replace(data, "password: <secret>", fmt.Sprintf("password: %s", pd), 1)
 	}
+	return []byte(data), nil
+}
 
-	if err := i.writeFile(i.outFile, []byte(data), 0755); err != nil {
+func (i *Injector) inject() error {
+	i.Lock()
+	defer i.Unlock()
+
+	cfg := &config.Config{}
+	if err := yaml.Unmarshal(i.curCfg.RawContent, &cfg); err != nil {
+		return errors.Wrapf(err, "unmarshal config")
+	}
+
+	if err := i.injectJobs(cfg); err != nil {
+		return errors.Wrapf(err, "inject jobs")
+	}
+	i.injectSelfMonitor(cfg)
+
+	data, err := i.marshal(cfg)
+	if err != nil {
+		return errors.Wrapf(err, "marshal injected config")
+	}
+
+	if err := i.writeFile(i.outFile, data, 0755); err != nil {
 		return errors.Wrapf(err, "write file failed")
 	}
 

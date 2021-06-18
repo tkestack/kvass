@@ -22,17 +22,46 @@ import (
 	"github.com/prometheus/prometheus/scrape"
 )
 
+// addPort checks whether we should add a default port to the address.
+// If the address is not valid, we don't append a port either.
+func addPort(s string) bool {
+	// If we can split, a port exists and we don'target have to add one.
+	if _, _, err := net.SplitHostPort(s); err == nil {
+		return false
+	}
+	// If adding a port makes it valid, the previous error
+	// was not due to an invalid address and we can append a port.
+	_, _, err := net.SplitHostPort(s + ":1234")
+	return err == nil
+}
+
+func completePort(addr string, scheme string) (string, error) {
+	// If it's an address with no trailing port, infer it based on the used scheme.
+	if addPort(addr) {
+		// Addresses reaching this point are already wrapped in [] if necessary.
+		switch scheme {
+		case "http", "":
+			addr = addr + ":80"
+		case "https":
+			addr = addr + ":443"
+		default:
+			return "", errors.Errorf("invalid scheme: %q", scheme)
+		}
+	}
+	return addr, nil
+}
+
 // populateLabels builds a label set from the given label set and scrape configuration.
 // It returns a label set before relabeling was applied as the second return value.
 // Returns the original discovered label set found before relabelling was applied if the target is dropped during relabeling.
 func populateLabels(lset labels.Labels, cfg *config.ScrapeConfig) (res, orig labels.Labels, err error) {
+	lb := labels.NewBuilder(lset)
 	// Copy labels into the labelset for the target if they are not set already.
 	scrapeLabels := []labels.Label{
 		{Name: model.JobLabel, Value: cfg.JobName},
 		{Name: model.MetricsPathLabel, Value: cfg.MetricsPath},
 		{Name: model.SchemeLabel, Value: cfg.Scheme},
 	}
-	lb := labels.NewBuilder(lset)
 
 	for _, l := range scrapeLabels {
 		if lv := lset.Get(l.Name); lv == "" {
@@ -58,33 +87,11 @@ func populateLabels(lset labels.Labels, cfg *config.ScrapeConfig) (res, orig lab
 	}
 
 	lb = labels.NewBuilder(lset)
-
-	// addPort checks whether we should add a default port to the address.
-	// If the address is not valid, we don'target append a port either.
-	addPort := func(s string) bool {
-		// If we can split, a port exists and we don'target have to add one.
-		if _, _, err := net.SplitHostPort(s); err == nil {
-			return false
-		}
-		// If adding a port makes it valid, the previous error
-		// was not due to an invalid address and we can append a port.
-		_, _, err := net.SplitHostPort(s + ":1234")
-		return err == nil
+	addr, err := completePort(lset.Get(model.AddressLabel), lset.Get(model.SchemeLabel))
+	if err != nil {
+		return nil, nil, err
 	}
-	addr := lset.Get(model.AddressLabel)
-	// If it's an address with no trailing port, infer it based on the used scheme.
-	if addPort(addr) {
-		// Addresses reaching this point are already wrapped in [] if necessary.
-		switch lset.Get(model.SchemeLabel) {
-		case "http", "":
-			addr = addr + ":80"
-		case "https":
-			addr = addr + ":443"
-		default:
-			return nil, nil, errors.Errorf("invalid scheme: %q", cfg.Scheme)
-		}
-		lb.Set(model.AddressLabel, addr)
-	}
+	lb.Set(model.AddressLabel, addr)
 
 	if err := config.CheckTargetAddress(model.LabelValue(addr)); err != nil {
 		return nil, nil, err
