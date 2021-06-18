@@ -52,7 +52,7 @@ Kvass is a Prometheus horizontal auto-scaling solution with following features.
 
 See flags of Coordinator [code](https://github.com/tkestack/kvass/blob/master/cmd/kvass/coordinator.go#L61)
 
-* Coordinaotr loads origin config file and do all prometheus service discovery
+* Coordinator loads origin config file and do all prometheus service discovery
 * For every active target, Coordinator do all "relabel_configs" and explore target series scale
 * Coordinaotr periodly try assgin explored targets to Sidecar according to Head Block Series of Prometheus.
 
