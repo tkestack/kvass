@@ -30,12 +30,13 @@ import (
 
 // ReplicasManager select Statefusets to get shard manager
 type ReplicasManager struct {
-	port            int
-	deletePVC       bool
-	cli             kubernetes.Interface
-	lg              logrus.FieldLogger
-	getStatefulSets func() (list *v1.StatefulSetList, e error)
-	stsUpdatedTime  map[string]*time.Time
+	port             int
+	deletePVC        bool
+	stsSelector      string
+	cli              kubernetes.Interface
+	lg               logrus.FieldLogger
+	listStatefulSets func(ctx context.Context, opts v12.ListOptions) (*v1.StatefulSetList, error)
+	stsUpdatedTime   map[string]*time.Time
 }
 
 // NewReplicasManager create a ReplicasManager
@@ -48,22 +49,21 @@ func NewReplicasManager(
 	lg logrus.FieldLogger,
 ) *ReplicasManager {
 	return &ReplicasManager{
-		cli:       cli,
-		port:      port,
-		deletePVC: deletePVC,
-		lg:        lg,
-		getStatefulSets: func() (list *v1.StatefulSetList, e error) {
-			return cli.AppsV1().StatefulSets(stsNamespace).List(context.TODO(), v12.ListOptions{
-				LabelSelector: stsSelector,
-			})
-		},
-		stsUpdatedTime: map[string]*time.Time{},
+		cli:              cli,
+		port:             port,
+		deletePVC:        deletePVC,
+		lg:               lg,
+		stsSelector:      stsSelector,
+		listStatefulSets: cli.AppsV1().StatefulSets(stsNamespace).List,
+		stsUpdatedTime:   map[string]*time.Time{},
 	}
 }
 
 // Replicas return all shards manager
 func (g *ReplicasManager) Replicas() ([]shard.Manager, error) {
-	sts, err := g.getStatefulSets()
+	sts, err := g.listStatefulSets(context.TODO(), v12.ListOptions{
+		LabelSelector: g.stsSelector,
+	})
 	if err != nil {
 		return nil, errors.Wrapf(err, "get statefulset")
 	}
