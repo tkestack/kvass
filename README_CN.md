@@ -20,14 +20,14 @@ Coordinator 用于服务发现，target调度和分片扩缩容管理.
       * [Kvass + Thanos](#kvass--thanos)
       * [Kvass + 远程存储](#kvass--远程存储)
       * [多副本](#多副本)
-      * [Target迁移原理](#Target迁移原理)
+      * [Target迁移原理](#target迁移原理)
       * [分片降压](#分片降压)
       * [分片缩容](#分片缩容)
       * [限制分片数目](#限制分片数目)
-      * [Target调度策略](#Target调度策略)
-   * [Demo体验](#Demo体验)
+      * [Target调度策略](#target调度策略)
+   * [安装Demo](#安装demo)
    * [最佳实践](#最佳实践)
-         * [启动参数推荐](#启动参数推荐)
+      * [启动参数推荐](#启动参数推荐)
    * [License](#license)
 
 # 概述
