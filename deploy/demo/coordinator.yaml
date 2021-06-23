@@ -42,7 +42,6 @@ spec:
             - --config-envsubst-file=/etc/prometheus/config_out/prometheus.env.yaml
           image: rancher/coreos-prometheus-config-reloader:v0.32.0
           imagePullPolicy: Always
-
           resources:
             limits:
               memory: 50Mi
@@ -57,11 +56,11 @@ spec:
           imagePullPolicy: Always
           args:
             - coordinator
-            - --shard.max-series=30000
-            - --shard.selector=app.kubernetes.io/name=prometheus
-            - --shard.namespace=$(NAMESPACE)
+            - --shard.max-series=30000 # max series per shard
+            - --shard.selector=app.kubernetes.io/name=prometheus # selector to get shard StatefulSets
+            - --shard.namespace=$(NAMESPACE) # namespace to select shard StatefulSets
             - --config.file=/etc/prometheus/config_out/prometheus.env.yaml
-            - --shard.max-idle-time=0
+            - --shard.max-idle-time=0 # max time to wait before idle shard removed, 0 means shard never removed
           env:
             - name: NAMESPACE
               valueFrom:

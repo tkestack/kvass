@@ -70,6 +70,9 @@ spec:
         - name: kvass
           args:
             - sidecar
+            - --store.path=/prometheus/ # where to store kvass local data
+            - --config.file=/etc/prometheus/config_out/prometheus.env.yaml # origin config file
+            - --config.output-file=/etc/prometheus/config_out/prometheus_injected.yaml # injected config file. this is the file prometheus use
           image: tkestack/kvass:latest
           imagePullPolicy: Always
           volumeMounts:
@@ -96,7 +99,7 @@ spec:
             - --storage.tsdb.no-lockfile
             - --storage.tsdb.max-block-duration=2h
             - --storage.tsdb.min-block-duration=2h
-            - --config.file=/etc/prometheus/config_out/prometheus_injected.yaml
+            - --config.file=/etc/prometheus/config_out/prometheus_injected.yaml # use injected config file instead of origin config file
             - --log.level=debug
           image: prom/prometheus:v2.19.2
           ports:
@@ -138,7 +141,6 @@ spec:
         resources:
           requests:
             storage: 10Gi
-        storageClassName: cbs
         volumeMode: Filesystem
   updateStrategy:
     rollingUpdate:

@@ -152,9 +152,9 @@ Coordinator 使用 label 选择器来选择分片的StatefulSets, 每一个State
 
 > git clone https://github.com/tkestack/kvass
 >
-> cd kvass/example
+> cd kvass
 >
-> kubectl create -f ./examples
+> kubectl create -f ./deploy/demo
 
 我可以看到一个叫"metrics"的Deployment， 其有 6 个Pod, 每个Pod会生成 10045 series (45 series 来至golang默认的metrics)。
 

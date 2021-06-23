@@ -6,7 +6,7 @@ metadata:
   name: metrics
 spec:
   progressDeadlineSeconds: 600
-  replicas: 5
+  replicas: 6
   revisionHistoryLimit: 5
   selector:
     matchLabels:

@@ -171,7 +171,7 @@ now we have 6 target with 60000+ series  and each Shard can scrape 30000 seriesï
 
 Coordinator  automaticly change replicate of Prometheus Statefulset to 3 and assign targets to them.
 
-![image-20200916190143119](./README.assets/image-20200916190143119.png)
+![image-20210618184014599](README.assets/image-20210618184014599.png)
 
 only 20000+ series in prometheus_tsdb_head of one Shard
 
@@ -179,7 +179,11 @@ only 20000+ series in prometheus_tsdb_head of one Shard
 
 but we can get global data view use thanos-query
 
-![image-20200917112711674](./README.assets/image-20200917112711674.png)
+![image-20210618184029590](README.assets/image-20210618184029590.png)
+
+we can also get currect record rule result.
+
+![image-20210618184146772](README.assets/image-20210618184146772.png)
 
 # Best practice
 
