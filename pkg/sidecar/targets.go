@@ -33,6 +33,7 @@ import (
 var (
 	storeFileName           = "kvass-shard.json"
 	oldVersionStoreFileName = "targets.json"
+	timeNow                 = time.Now
 )
 
 // TargetsInfo contains all current targets
@@ -73,6 +74,10 @@ func NewTargetsManager(storeDir string, log logrus.FieldLogger) *TargetsManager 
 // Load load local targets information from storeDir
 func (t *TargetsManager) Load() error {
 	_ = os.MkdirAll(t.storeDir, 0755)
+	defer func() {
+		_ = t.UpdateTargets(&shard.UpdateTargetsRequest{Targets: t.targets.Targets})
+	}()
+
 	data, err := ioutil.ReadFile(t.storePath())
 	if err == nil {
 		if err := json.Unmarshal(data, &t.targets); err != nil {
@@ -96,7 +101,7 @@ func (t *TargetsManager) Load() error {
 		}
 	}
 
-	return t.UpdateTargets(&shard.UpdateTargetsRequest{Targets: t.targets.Targets})
+	return nil
 }
 
 // AddUpdateCallbacks add a call back for targets updating event
@@ -119,7 +124,7 @@ func (t *TargetsManager) UpdateTargets(req *shard.UpdateTargetsRequest) error {
 
 func (t *TargetsManager) updateIdleState() {
 	if len(t.targets.Status) == 0 && t.targets.IdleAt == nil {
-		t.targets.IdleAt = types.TimePtr(time.Now())
+		t.targets.IdleAt = types.TimePtr(timeNow())
 	}
 
 	if len(t.targets.Status) != 0 {

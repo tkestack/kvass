@@ -130,18 +130,19 @@ spec:
           name: config-out
         - emptyDir: {}
           name: tls-assets
-  volumeClaimTemplates:
-    - metadata:
-        labels:
-          k8s-app: prometheus
-        name: data
-      spec:
-        accessModes:
-          - ReadWriteOnce
-        resources:
-          requests:
-            storage: 10Gi
-        volumeMode: Filesystem
+#  volumeClaimTemplates:
+#    - metadata:
+#        labels:
+#          k8s-app: prometheus
+#        name: data
+#      spec:
+#        accessModes:
+#          - ReadWriteOnce
+#        resources:
+#          requests:
+#            storage: 10Gi
+#        storageClassName: cbs
+#        volumeMode: Filesystem
   updateStrategy:
     rollingUpdate:
       partition: 0

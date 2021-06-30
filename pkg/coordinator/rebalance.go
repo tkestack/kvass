@@ -41,7 +41,6 @@ type shardInfo struct {
 
 func newShardInfo(sd *shard.Shard) *shardInfo {
 	return &shardInfo{
-		changeAble: true,
 		shard:      sd,
 		runtime:    &shard.RuntimeInfo{},
 		newTargets: map[string][]*target.Target{},
@@ -94,30 +93,7 @@ func (c *Coordinator) getShardInfos(shards []*shard.Shard) []*shardInfo {
 		s := tmp
 		i := index
 		g.Go(func() (err error) {
-			si := newShardInfo(s)
-			all[i] = si
-			if !s.Ready {
-				c.log.Infof("%s is not ready", s.ID)
-				si.changeAble = false
-				return nil
-			}
-			si.scraping, err = s.TargetStatus()
-			if err != nil {
-				c.log.Error(err.Error())
-				si.changeAble = false
-			}
-
-			si.runtime, err = s.RuntimeInfo()
-			if err != nil {
-				c.log.Error(err.Error())
-				si.changeAble = false
-			} else {
-				if si.runtime.ConfigHash != c.getConfigMd5() {
-					c.log.Warnf("config of %s is not up to date, expect md5 = %s, shard md5 = %s", si.shard.ID, c.getConfigMd5(), si.runtime.ConfigHash)
-					si.changeAble = false
-				}
-			}
-
+			all[i] = c.getOneShardInfo(s)
 			return nil
 		})
 	}
@@ -125,12 +101,63 @@ func (c *Coordinator) getShardInfos(shards []*shard.Shard) []*shardInfo {
 	return all
 }
 
+func (c *Coordinator) getOneShardInfo(s *shard.Shard) *shardInfo {
+	var (
+		err error
+		si  = newShardInfo(s)
+	)
+
+	if !s.Ready {
+		c.log.Infof("%s is not ready", s.ID)
+		return si
+	}
+
+	si.scraping, err = s.TargetStatus()
+	if err != nil {
+		c.log.Error(err.Error())
+		return si
+	}
+
+	si.runtime, err = s.RuntimeInfo()
+	if err != nil {
+		c.log.Error(err.Error())
+		return si
+	}
+
+	cfg := c.getConfig()
+	// try update config to send raw config to
+	if si.runtime.ConfigHash != cfg.ConfigHash {
+		c.log.Infof("shard %s config need update", si.shard.ID)
+		if err := s.UpdateConfig(&shard.UpdateConfigRequest{
+			RawContent: string(cfg.RawContent),
+		}); err != nil {
+			c.log.Error(err.Error())
+			return si
+		}
+
+		// reload runtime
+		si.runtime, err = s.RuntimeInfo()
+		if err != nil {
+			c.log.Error(err.Error())
+			return si
+		}
+	}
+
+	if si.runtime.ConfigHash != cfg.ConfigHash {
+		c.log.Warnf("config of %s is not up to date, expect md5 = %s, shard md5 = %s", si.shard.ID, cfg.ConfigHash, si.runtime.ConfigHash)
+		return si
+	}
+
+	si.changeAble = true
+	return si
+}
+
 func (c *Coordinator) applyShardsInfo(shards []*shardInfo) {
 	g := errgroup.Group{}
 	for _, tmp := range shards {
 		s := tmp
 		if !s.changeAble {
-			c.log.Warnf("shard group %s is unHealth, skip apply change", s.shard.ID)
+			c.log.Warnf("shard %s is unHealth, skip apply change", s.shard.ID)
 			continue
 		}
 
@@ -212,9 +239,9 @@ func (c *Coordinator) alleviateShards(changeAbleShards []*shardInfo) (needSpace 
 
 	for _, s := range changeAbleShards {
 		for _, t := range threshold {
-			if s.runtime.HeadSeries >= seriesWithRate(c.maxSeries, t.maxSeriesRate) {
-				c.log.Infof("%s series is %d, over rate %d", s.shard.ID, s.runtime.HeadSeries, t.maxSeriesRate)
-				needSpace += c.alleviateShard(s, changeAbleShards, seriesWithRate(c.maxSeries, t.expectSeriesRate))
+			if s.runtime.HeadSeries >= seriesWithRate(c.option.MaxSeries, t.maxSeriesRate) {
+				c.log.Infof("%s series is %d, over rate %f", s.shard.ID, s.runtime.HeadSeries, t.maxSeriesRate)
+				needSpace += c.alleviateShard(s, changeAbleShards, seriesWithRate(c.option.MaxSeries, t.expectSeriesRate))
 				break
 			}
 		}
@@ -239,7 +266,7 @@ func (c *Coordinator) alleviateShard(s *shardInfo, changeAbleShards []*shardInfo
 			continue
 		}
 
-		if tar.Series > c.maxSeries {
+		if tar.Series > c.option.MaxSeries {
 			c.log.Warnf("too big series [%d] series is [%d], skip alleviate", hash, tar.Series)
 			return 0
 		}
@@ -250,7 +277,7 @@ func (c *Coordinator) alleviateShard(s *shardInfo, changeAbleShards []*shardInfo
 				continue
 			}
 
-			if os.runtime.HeadSeries+tar.Series < c.maxSeries {
+			if os.runtime.HeadSeries+tar.Series < c.option.MaxSeries {
 				c.log.Infof("transfer target from %s to %s series = (%d) ", s.shard.ID, os.shard.ID, tar.Series)
 				transferTarget(s, os, hash)
 				total -= tar.Series
@@ -300,7 +327,7 @@ func (c *Coordinator) assignNoScrapingTargets(
 			continue
 		}
 
-		if status.Series > c.maxSeries {
+		if status.Series > c.option.MaxSeries {
 			c.log.Warnf("target too big: %s", tar.ShardTarget.NoParamURL())
 			continue
 		}
@@ -319,13 +346,13 @@ func (c *Coordinator) assignNoScrapingTargets(
 func (c *Coordinator) getFreeShard(shards []*shardInfo, series int64) *shardInfo {
 	cs := make([]wr.Choice, 0)
 	for _, s := range shards {
-		if s.changeAble && s.runtime.HeadSeries+series < c.maxSeries {
-			if c.maxIdleTime != 0 {
+		if s.changeAble && s.runtime.HeadSeries+series < c.option.MaxSeries {
+			if c.option.MaxIdleTime != 0 {
 				return s
 			}
 			cs = append(cs, wr.Choice{
 				Item:   s,
-				Weight: uint(c.maxSeries - s.runtime.HeadSeries),
+				Weight: uint(c.option.MaxSeries - s.runtime.HeadSeries),
 			})
 		}
 	}
@@ -375,7 +402,7 @@ func (c *Coordinator) tryScaleDown(shards []*shardInfo) int32 {
 	// check for scale able shard
 	for ; i >= 0; i-- {
 		s := shards[i]
-		if s.changeAble && s.runtime.IdleStartAt != nil && time.Now().Sub(*s.runtime.IdleStartAt) > c.maxIdleTime {
+		if s.changeAble && s.runtime.IdleStartAt != nil && time.Now().Sub(*s.runtime.IdleStartAt) > c.option.MaxIdleTime {
 			c.log.Infof("%s is remove able", s.shard.ID)
 			scale--
 		} else {
@@ -413,7 +440,7 @@ func (c *Coordinator) shardCanBeIdle(src *shardInfo, shards []*shardInfo) bool {
 	spaces := make([]int64, 0)
 	for _, s := range shards {
 		if s != src && s.changeAble {
-			spaces = append(spaces, c.maxSeries-s.runtime.HeadSeries)
+			spaces = append(spaces, c.option.MaxSeries-s.runtime.HeadSeries)
 		}
 	}
 
@@ -458,7 +485,7 @@ func (c *Coordinator) shardBecomeIdle(src *shardInfo, shards []*shardInfo) bool 
 func (c *Coordinator) tryScaleUp(shard []*shardInfo, needSpace int64) int32 {
 	health := changeAbleShardsInfo(shard)
 	exp := int32(len(health))
-	exp += int32((needSpace / c.maxSeries) + 1)
+	exp += int32((needSpace / c.option.MaxSeries) + 1)
 
 	if exp < int32(len(shard)) {
 		exp = int32(len(shard))

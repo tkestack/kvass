@@ -15,40 +15,35 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package prom
+package static
 
 import (
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
-	"path"
 	"testing"
 )
 
-func TestConfigManager_ReloadFromFile(t *testing.T) {
+func TestReplicasManager_Replicas(t *testing.T) {
 	type caseInfo struct {
-		fileExist    bool
-		content      string
+		fileContent  string
+		wantReplicas int
 		wantErr      bool
-		wantCallBack bool
 	}
 
 	successCase := func() *caseInfo {
 		return &caseInfo{
-			fileExist: true,
-			content: `
-global:
-  evaluation_interval: 10s
-  scrape_interval: 15s
-  external_labels:
-    replica: pod1
-scrape_configs:
-- job_name: "test"
-  static_configs:
-  - targets:
-    - 127.0.0.1:9091
+			fileContent: `
+replicas:
+- shards:
+  - id: shard-0
+    url: http://1.1.1.1
+- shards:
+  - id: shard-1
+    url: http://2.2.2.2
 `,
 			wantErr:      false,
-			wantCallBack: true,
+			wantReplicas: 2,
 		}
 	}
 
@@ -61,23 +56,16 @@ scrape_configs:
 			updateCase: func(c *caseInfo) {},
 		},
 		{
-			desc: "file not exit, want err ",
+			desc: "wrong config format",
 			updateCase: func(c *caseInfo) {
-				c.fileExist = false
+				c.fileContent = `replicas : a`
 				c.wantErr = true
 			},
 		},
 		{
-			desc: "empty content, want err",
+			desc: "read file err",
 			updateCase: func(c *caseInfo) {
-				c.content = ""
-				c.wantErr = true
-			},
-		},
-		{
-			desc: "wrong content format, want err",
-			updateCase: func(c *caseInfo) {
-				c.content = "a : a : a"
+				c.fileContent = ""
 				c.wantErr = true
 			},
 		},
@@ -88,27 +76,18 @@ scrape_configs:
 			r := require.New(t)
 			c := successCase()
 			cs.updateCase(c)
-			file := path.Join(t.TempDir(), "a")
-			if c.fileExist {
-				_ = ioutil.WriteFile(file, []byte(c.content), 0777)
+			file := t.TempDir() + "shards.yaml"
+			if c.fileContent != "" {
+				r.NoError(ioutil.WriteFile(file, []byte(c.fileContent), 0777))
 			}
 
-			m := NewConfigManager()
-			updated := false
-			m.AddReloadCallbacks(func(cfg *ConfigInfo) error {
-				updated = true
-				r.Equal(string(cfg.RawContent), c.content)
-				r.Equal("16887931695534343218", cfg.ConfigHash)
-				r.Equal(1, len(cfg.Config.ScrapeConfigs))
-				return nil
-			})
-
-			err := m.ReloadFromFile(file)
+			m := NewReplicasManager(file, logrus.New())
+			res, err := m.Replicas()
 			if c.wantErr {
 				r.Error(err)
 				return
 			}
-			r.Equal(c.wantCallBack, updated)
+			r.Equal(c.wantReplicas, len(res))
 		})
 	}
 }

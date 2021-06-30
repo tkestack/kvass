@@ -87,6 +87,11 @@ func (r *Shard) TargetStatus() (map[uint64]*target.ScrapeStatus, error) {
 	return res, nil
 }
 
+// UpdateConfig try update shard config by API
+func (r *Shard) UpdateConfig(req *UpdateConfigRequest) error {
+	return r.APIPost(r.url+"/api/v1/status/config", req, nil)
+}
+
 // UpdateTarget try apply targets to sidecar
 // request will be skipped if nothing changed according to r.scraping
 func (r *Shard) UpdateTarget(request *UpdateTargetsRequest) error {

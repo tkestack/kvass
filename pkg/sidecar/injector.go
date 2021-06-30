@@ -74,6 +74,7 @@ func NewInjector(outFile string, option InjectConfigOptions, log logrus.FieldLog
 		curTargets: map[string][]*target.Target{},
 		writeFile:  ioutil.WriteFile,
 		log:        log,
+		curCfg:     prom.DefaultConfig,
 	}
 }
 
@@ -199,6 +200,10 @@ func (i *Injector) marshal(cfg *config.Config) ([]byte, error) {
 func (i *Injector) inject() error {
 	i.Lock()
 	defer i.Unlock()
+	// create a default empty config for prometheus and thanos sidecar
+	if i.curCfg == prom.DefaultConfig {
+		return i.writeFile(i.outFile, i.curCfg.RawContent, 0755)
+	}
 
 	cfg := &config.Config{}
 	if err := yaml.Unmarshal(i.curCfg.RawContent, &cfg); err != nil {

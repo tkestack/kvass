@@ -23,8 +23,15 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/pkg/labels"
-	"github.com/sirupsen/logrus"
 	"io/ioutil"
+)
+
+const (
+	defaultConfig = `
+global:
+  external_labels:
+    status: default
+`
 )
 
 // ConfigInfo include all information of current config
@@ -37,49 +44,46 @@ type ConfigInfo struct {
 	Config *config.Config
 }
 
+// DefaultConfig init a ConfigInfo with default prometheus config
+var DefaultConfig = &ConfigInfo{
+	RawContent: []byte(defaultConfig),
+	ConfigHash: "",
+	Config:     &config.DefaultConfig,
+}
+
 // ConfigManager do config manager
 type ConfigManager struct {
-	file          string
 	callbacks     []func(cfg *ConfigInfo) error
 	currentConfig *ConfigInfo
-	log           logrus.FieldLogger
 }
 
 // NewConfigManager return an config manager
-func NewConfigManager(file string, log logrus.FieldLogger) *ConfigManager {
+func NewConfigManager() *ConfigManager {
 	return &ConfigManager{
-		file: file,
-		log:  log,
+		currentConfig: &ConfigInfo{
+			Config: &config.DefaultConfig,
+		},
 	}
 }
 
-// Reload reload config from file and do all callbacks
-func (c *ConfigManager) Reload() error {
-	if err := c.updateConfigInfo(); err != nil {
+// ReloadFromFile reload config from file and do all callbacks
+func (c *ConfigManager) ReloadFromFile(file string) error {
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
 		return err
 	}
-
-	for _, f := range c.callbacks {
-		if err := f(c.currentConfig); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return c.ReloadFromRaw(data)
 }
 
-func (c *ConfigManager) updateConfigInfo() (err error) {
+// ReloadFromRaw reload config from raw data
+func (c *ConfigManager) ReloadFromRaw(data []byte) (err error) {
 	info := &ConfigInfo{}
-	info.RawContent, err = ioutil.ReadFile(c.file)
-	if err != nil {
-		return errors.Wrapf(err, "read file")
-	}
-
+	info.RawContent = data
 	if len(info.RawContent) == 0 {
-		return errors.Wrapf(err, "config content is empty")
+		return errors.New("config content is empty")
 	}
 
-	info.Config, err = config.LoadFile(c.file)
+	info.Config, err = config.Load(string(data))
 	if err != nil {
 		return errors.Wrapf(err, "marshal config")
 	}
@@ -95,6 +99,13 @@ func (c *ConfigManager) updateConfigInfo() (err error) {
 	info.ConfigHash = fmt.Sprint(hash)
 	info.Config.GlobalConfig.ExternalLabels = eLb
 	c.currentConfig = info
+
+	for _, f := range c.callbacks {
+		if err := f(c.currentConfig); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

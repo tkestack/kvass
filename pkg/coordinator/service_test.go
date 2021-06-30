@@ -28,6 +28,7 @@ import (
 	"tkestack.io/kvass/pkg/api"
 	"tkestack.io/kvass/pkg/discovery"
 	"tkestack.io/kvass/pkg/prom"
+	"tkestack.io/kvass/pkg/shard"
 	"tkestack.io/kvass/pkg/target"
 	"tkestack.io/kvass/pkg/utils/test"
 )
@@ -214,18 +215,33 @@ func TestAPI_Targets(t *testing.T) {
 	}
 	for _, cs := range cases {
 		t.Run(cs.name, func(t *testing.T) {
-			a := NewService(prom.NewConfigManager("", logrus.New()), getScrapeStatus, getActive, getDrop, logrus.New())
+			a := NewService("", prom.NewConfigManager(), getScrapeStatus, getActive, getDrop, logrus.New())
 			uri := "/api/v1/targets"
 			if len(cs.param) != 0 {
 				uri += "?" + cs.param.Encode()
 			}
 
 			res := &TargetDiscovery{}
-			r := api.TestCall(t, a.Engine.ServeHTTP, uri, http.MethodGet, "", res)
+			r, _ := api.TestCall(t, a.Engine.ServeHTTP, uri, http.MethodGet, "", res)
 			r.Equal(cs.wantActive, len(res.ActiveTargets))
 			r.Equal(cs.wantDropped, len(res.DroppedTargets))
 			r.JSONEq(test.MustJSON(cs.wantStatistics), test.MustJSON(res.ActiveStatistics))
 		})
 	}
+}
 
+func TestAPI_RuntimeInfo(t *testing.T) {
+	a := NewService("", prom.NewConfigManager(), func() map[uint64]*target.ScrapeStatus {
+		return map[uint64]*target.ScrapeStatus{
+			1: {
+				Series: 100,
+			},
+			2: {
+				Series: 100,
+			},
+		}
+	}, nil, nil, logrus.New())
+	res := &shard.RuntimeInfo{}
+	r, _ := api.TestCall(t, a.Engine.ServeHTTP, "/api/v1/shard/runtimeinfo", http.MethodGet, "", res)
+	r.Equal(int64(200), res.HeadSeries)
 }
