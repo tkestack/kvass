@@ -19,20 +19,22 @@ package main
 
 import (
 	"context"
-	k8sd "github.com/prometheus/prometheus/discovery/kubernetes"
-	"net/url"
-	"path"
-	"time"
-	"tkestack.io/kvass/pkg/prom"
-
+	"fmt"
 	"github.com/go-kit/kit/log"
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/prometheus/config"
 	prom_discovery "github.com/prometheus/prometheus/discovery"
+	k8sd "github.com/prometheus/prometheus/discovery/kubernetes"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
+	"net/url"
+	"path"
+	"time"
+	"tkestack.io/kvass/pkg/prom"
+	"tkestack.io/kvass/pkg/shard"
+	"tkestack.io/kvass/pkg/shard/static"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -45,6 +47,8 @@ import (
 )
 
 var cdCfg = struct {
+	shardType        string
+	shardStaticFile  string
 	shardNamespace   string
 	shardSelector    string
 	shardPort        int
@@ -62,26 +66,43 @@ var cdCfg = struct {
 }{}
 
 func init() {
-	coordinatorCmd.Flags().StringVar(&cdCfg.shardNamespace, "shard.namespace", "", "namespace of target shard StatefulSets")
-	coordinatorCmd.Flags().StringVar(&cdCfg.shardSelector, "shard.selector", "app.kubernetes.io/name=prometheus", "label selector for select target StatefulSets")
-	coordinatorCmd.Flags().IntVar(&cdCfg.shardPort, "shard.port", 8080, "the port of sidecar server")
-	coordinatorCmd.Flags().Int64Var(&cdCfg.shardMaxSeries, "shard.max-series", 1000000, "max series of per shard")
-	coordinatorCmd.Flags().Int32Var(&cdCfg.shardMaxShard, "shard.max-shard", 999999, "max shard number")
-	coordinatorCmd.Flags().Int32Var(&cdCfg.shardMinShard, "shard.min-shard", 0, "min shard number")
-
+	coordinatorCmd.Flags().StringVar(&cdCfg.shardType, "shard.type", "k8s",
+		"type of shard deploy: 'k8s'(default), 'static'")
+	coordinatorCmd.Flags().StringVar(&cdCfg.shardStaticFile, "shard.static-file", "static-shards.yaml",
+		"static shards config file [shard.type must be 'static']")
+	coordinatorCmd.Flags().StringVar(&cdCfg.shardNamespace, "shard.namespace", "",
+		"namespace of target shard StatefulSets [shard.type must be 'k8s']")
+	coordinatorCmd.Flags().StringVar(&cdCfg.shardSelector, "shard.selector", "app.kubernetes.io/name=prometheus",
+		"label selector for select target StatefulSets [shard.type must be 'k8s']")
+	coordinatorCmd.Flags().IntVar(&cdCfg.shardPort, "shard.port", 8080,
+		"the port of sidecar server")
+	coordinatorCmd.Flags().Int64Var(&cdCfg.shardMaxSeries, "shard.max-series", 1000000,
+		"max series of per shard")
+	coordinatorCmd.Flags().Int32Var(&cdCfg.shardMaxShard, "shard.max-shard", 999999,
+		"max shard number")
+	coordinatorCmd.Flags().Int32Var(&cdCfg.shardMinShard, "shard.min-shard", 0,
+		"min shard number")
 	coordinatorCmd.Flags().DurationVar(&cdCfg.shardMaxIdleTime, "shard.max-idle-time", 0,
 		"wait time before shard is removed after shard become idle,"+
 			"scale down is disabled if this flag is 0")
-	coordinatorCmd.Flags().BoolVar(&cdCfg.shardDeletePVC, "shard.delete-pvc", true, "kvass will delete pvc when shard is removed")
-	coordinatorCmd.Flags().IntVar(&cdCfg.exploreMaxCon, "explore.concurrence", 1000, "max explore concurrence")
-	coordinatorCmd.Flags().StringVar(&cdCfg.webAddress, "web.address", ":9090", "server bind address")
-	coordinatorCmd.Flags().StringVar(&cdCfg.configFile, "config.file", "prometheus.yml", "config file path")
-	coordinatorCmd.Flags().DurationVar(&cdCfg.syncInterval, "coordinator.interval", time.Second*10, "the interval of coordinator loop")
-	coordinatorCmd.Flags().DurationVar(&cdCfg.sdInitTimeout, "sd.init-timeout", time.Minute*1, "max time wait for all job first service discovery when coordinator start")
-
-	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.url, "inject.kubernetes-url", "", "kube-apiserver url to inject to all kubernetes sd")
-	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.proxy, "inject.kubernetes-proxy", "", "ckube-apiserver proxy url to inject to all kubernetes sd")
-	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.serviceAccountPath, "inject.kubernetes-sa-path", "", "change default service account token path")
+	coordinatorCmd.Flags().BoolVar(&cdCfg.shardDeletePVC, "shard.delete-pvc", true,
+		"kvass will delete pvc when shard is removed")
+	coordinatorCmd.Flags().IntVar(&cdCfg.exploreMaxCon, "explore.concurrence", 1000,
+		"max explore concurrence")
+	coordinatorCmd.Flags().StringVar(&cdCfg.webAddress, "web.address", ":9090",
+		"server bind address")
+	coordinatorCmd.Flags().StringVar(&cdCfg.configFile, "config.file", "prometheus.yml",
+		"config file path")
+	coordinatorCmd.Flags().DurationVar(&cdCfg.syncInterval, "coordinator.interval", time.Second*10,
+		"the interval of coordinator loop")
+	coordinatorCmd.Flags().DurationVar(&cdCfg.sdInitTimeout, "sd.init-timeout", time.Minute*1,
+		"max time wait for all job first service discovery when coordinator start")
+	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.url, "inject.kubernetes-url", "",
+		"kube-apiserver url to inject to all kubernetes sd")
+	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.proxy, "inject.kubernetes-proxy", "",
+		"ckube-apiserver proxy url to inject to all kubernetes sd")
+	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.serviceAccountPath, "inject.kubernetes-sa-path", "",
+		"change default service account token path")
 	rootCmd.AddCommand(coordinatorCmd)
 }
 
@@ -92,16 +113,6 @@ var coordinatorCmd = &cobra.Command{
 distribution targets to shards`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := cmd.Flags().Parse(args); err != nil {
-			return err
-		}
-
-		kcfg, err := rest.InClusterConfig()
-		if err != nil {
-			return err
-		}
-
-		cli, err := kubernetes.NewForConfig(kcfg)
-		if err != nil {
 			return err
 		}
 
@@ -121,24 +132,18 @@ distribution targets to shards`,
 			discoveryManagerScrape = prom_discovery.NewManager(context.Background(), log.With(logger, "component", "discovery manager scrape"), prom_discovery.Name("scrape"))
 			targetDiscovery        = discovery.New(lg.WithField("component", "target discovery"))
 			exp                    = explore.New(scrapeManager, lg.WithField("component", "explore"))
-			cfgManager             = prom.NewConfigManager(cdCfg.configFile, lg.WithField("component", "config manager"))
-
-			gm = k8s_shard.NewReplicasManager(cli, cdCfg.shardNamespace,
-				cdCfg.shardSelector,
-				cdCfg.shardPort,
-				cdCfg.shardDeletePVC,
-				lg.WithField("component", "shard manager"))
+			cfgManager             = prom.NewConfigManager()
 
 			cd = coordinator.NewCoordinator(
-				gm,
-				cdCfg.shardMaxSeries,
-				cdCfg.shardMaxShard,
-				cdCfg.shardMinShard,
-				cdCfg.shardMaxIdleTime,
-				cdCfg.syncInterval,
-				func() string {
-					return cfgManager.ConfigInfo().ConfigHash
+				&coordinator.Option{
+					MaxSeries:   cdCfg.shardMaxSeries,
+					MaxShard:    cdCfg.shardMaxShard,
+					MinShard:    cdCfg.shardMinShard,
+					MaxIdleTime: cdCfg.shardMaxIdleTime,
+					Period:      cdCfg.syncInterval,
 				},
+				getReplicasManager(lg),
+				cfgManager.ConfigInfo,
 				exp.Get,
 				targetDiscovery.ActiveTargetsByHash,
 				lg.WithField("component", "coordinator"))
@@ -161,6 +166,7 @@ distribution targets to shards`,
 		)
 
 		svc := coordinator.NewService(
+			cdCfg.configFile,
 			cfgManager,
 			cd.LastGlobalScrapeStatus,
 			targetDiscovery.ActiveTargets,
@@ -168,7 +174,7 @@ distribution targets to shards`,
 			lg.WithField("component", "web"),
 		)
 
-		if err := cfgManager.Reload(); err != nil {
+		if err := cfgManager.ReloadFromFile(cdCfg.configFile); err != nil {
 			panic(err)
 		}
 
@@ -214,6 +220,31 @@ distribution targets to shards`,
 
 		return g.Wait()
 	},
+}
+
+func getReplicasManager(lg logrus.FieldLogger) shard.ReplicasManager {
+	switch cdCfg.shardType {
+	case "k8s":
+		kcfg, err := rest.InClusterConfig()
+		if err != nil {
+			panic(err)
+		}
+
+		cli, err := kubernetes.NewForConfig(kcfg)
+		if err != nil {
+			panic(err)
+		}
+		return k8s_shard.NewReplicasManager(cli, cdCfg.shardNamespace,
+			cdCfg.shardSelector,
+			cdCfg.shardPort,
+			cdCfg.shardDeletePVC,
+			lg.WithField("component", "shard manager"))
+
+	case "static":
+		return static.NewReplicasManager(cdCfg.shardStaticFile, lg.WithField("component", "shard manager"))
+	default:
+		panic(fmt.Sprintf("unknown shard.type %s", cdCfg.shardType))
+	}
 }
 
 type configInjectOption struct {

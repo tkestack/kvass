@@ -22,6 +22,7 @@ import (
 	"github.com/pkg/errors"
 	"time"
 	"tkestack.io/kvass/pkg/discovery"
+	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/shard"
 	"tkestack.io/kvass/pkg/target"
 	"tkestack.io/kvass/pkg/utils/wait"
@@ -29,53 +30,57 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Option indicate all coordinate arguments
+type Option struct {
+	// MaxSeries is max series every shard can assign
+	MaxSeries int64
+	// MaxShard is the max number we can scale up to
+	MaxShard int32
+	// MinShard is the min shard number that coordinator need
+	// Coordinator will change scale to MinShard if current shard number < MinShard
+	MinShard int32
+	// MaxIdleTime indicate how long to wait when one shard has no target is scraping
+	MaxIdleTime time.Duration
+	// Period is the interval between every coordinating
+	Period time.Duration
+}
+
 // Coordinator periodically re balance all replicates
 type Coordinator struct {
-	log                    logrus.FieldLogger
-	reManager              shard.ReplicasManager
-	maxSeries              int64
-	maxShard               int32
-	minShard               int32
-	maxIdleTime            time.Duration
-	period                 time.Duration
+	log              logrus.FieldLogger
+	reManager        shard.ReplicasManager
+	option           *Option
+	getConfig        func() *prom.ConfigInfo
+	getExploreResult func(hash uint64) *target.ScrapeStatus
+	getActive        func() map[uint64]*discovery.SDTargets
+
 	lastGlobalScrapeStatus map[uint64]*target.ScrapeStatus
-	getConfigMd5           func() string
-	getExploreResult       func(hash uint64) *target.ScrapeStatus
-	getActive              func() map[uint64]*discovery.SDTargets
 }
 
 // NewCoordinator create a new coordinator service
 func NewCoordinator(
+	option *Option,
 	reManager shard.ReplicasManager,
-	maxSeries int64,
-	maxShard int32,
-	minShard int32,
-	maxIdleTime time.Duration,
-	period time.Duration,
-	getConfigMd5 func() string,
+	getConfig func() *prom.ConfigInfo,
 	getExploreResult func(hash uint64) *target.ScrapeStatus,
 	getActive func() map[uint64]*discovery.SDTargets,
 	log logrus.FieldLogger) *Coordinator {
 	return &Coordinator{
 		reManager:        reManager,
-		getConfigMd5:     getConfigMd5,
+		getConfig:        getConfig,
 		getExploreResult: getExploreResult,
 		getActive:        getActive,
-		maxShard:         maxShard,
-		minShard:         minShard,
-		maxSeries:        maxSeries,
-		maxIdleTime:      maxIdleTime,
+		option:           option,
 		log:              log,
-		period:           period,
 	}
 }
 
 // Run do coordinate periodically until ctx done
 func (c *Coordinator) Run(ctx context.Context) error {
-	return wait.RunUntil(ctx, c.log, c.period, c.runOnce)
+	return wait.RunUntil(ctx, c.log, c.option.Period, c.runOnce)
 }
 
-// LastGlobalScrapeStatus return the last scraping status of last coordinate
+// LastGlobalScrapeStatus return the last scraping status of all targets
 func (c *Coordinator) LastGlobalScrapeStatus() map[uint64]*target.ScrapeStatus {
 	return c.lastGlobalScrapeStatus
 }
@@ -102,8 +107,8 @@ func (c *Coordinator) runOnce() error {
 			changeAbleShards = changeAbleShardsInfo(shardsInfo)
 		)
 
-		if int32(len(changeAbleShards)) < c.minShard { // insure that scaling up to min shard
-			if err := repItem.ChangeScale(c.minShard); err != nil {
+		if int32(len(changeAbleShards)) < c.option.MinShard { // insure that scaling up to min shard
+			if err := repItem.ChangeScale(c.option.MinShard); err != nil {
 				c.log.Error(err.Error())
 				continue
 			}
@@ -118,16 +123,16 @@ func (c *Coordinator) runOnce() error {
 		if needSpace != 0 {
 			c.log.Infof("need space %d", needSpace)
 			scale = c.tryScaleUp(shardsInfo, needSpace)
-		} else if c.maxIdleTime != 0 {
+		} else if c.option.MaxIdleTime != 0 {
 			scale = c.tryScaleDown(shardsInfo)
 		}
 
-		if scale > c.maxShard {
-			scale = c.maxShard
+		if scale > c.option.MaxShard {
+			scale = c.option.MaxShard
 		}
 
-		if scale < c.minShard {
-			scale = c.minShard
+		if scale < c.option.MinShard {
+			scale = c.option.MinShard
 		}
 
 		updateScrapingTargets(shardsInfo, active)

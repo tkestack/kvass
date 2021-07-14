@@ -40,6 +40,7 @@ import (
 type Service struct {
 	// gin.Engine is the gin engine for handle http request
 	*gin.Engine
+	configFile       string
 	lg               logrus.FieldLogger
 	cfgManager       *prom.ConfigManager
 	getScrapeStatus  func() map[uint64]*target.ScrapeStatus
@@ -49,12 +50,14 @@ type Service struct {
 
 // NewService return a new web server
 func NewService(
+	configFile string,
 	cfgManager *prom.ConfigManager,
 	getScrapeStatus func() map[uint64]*target.ScrapeStatus,
 	getActiveTargets func() map[string][]*discovery.SDTargets,
 	getDropTargets func() map[string][]*discovery.SDTargets,
 	lg logrus.FieldLogger) *Service {
 	w := &Service{
+		configFile:       configFile,
 		Engine:           gin.Default(),
 		lg:               lg,
 		cfgManager:       cfgManager,
@@ -68,7 +71,7 @@ func NewService(
 	w.GET("/api/v1/shard/runtimeinfo", api.Wrap(lg, w.runtimeInfo))
 
 	w.POST("/-/reload", api.Wrap(lg, func(ctx *gin.Context) *api.Result {
-		if err := w.cfgManager.Reload(); err != nil {
+		if err := w.cfgManager.ReloadFromFile(configFile); err != nil {
 			return api.BadDataErr(err, "reload failed")
 		}
 		return api.Data(nil)

@@ -18,6 +18,7 @@
 package sidecar
 
 import (
+	"fmt"
 	"github.com/cssivision/reverseproxy"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
@@ -33,6 +34,7 @@ import (
 // Service is the api server of shard
 type Service struct {
 	lg            logrus.FieldLogger
+	configFile    string
 	ginEngine     *gin.Engine
 	cfgManager    *prom.ConfigManager
 	targetManager *TargetsManager
@@ -44,6 +46,7 @@ type Service struct {
 
 // NewService create new api server of shard
 func NewService(
+	configFile string,
 	promURL string,
 	getHeadSeries func() (int64, error),
 	cfgManager *prom.ConfigManager,
@@ -51,6 +54,7 @@ func NewService(
 	lg logrus.FieldLogger) *Service {
 
 	s := &Service{
+		configFile:    configFile,
 		promURL:       promURL,
 		ginEngine:     gin.Default(),
 		lg:            lg,
@@ -67,11 +71,15 @@ func NewService(
 	}))
 	s.ginEngine.POST(s.path("/api/v1/shard/targets/"), api.Wrap(s.lg, s.updateTargets))
 	s.ginEngine.POST(s.path("/-/reload/"), api.Wrap(lg, func(ctx *gin.Context) *api.Result {
-		if err := s.cfgManager.Reload(); err != nil {
+		if err := s.cfgManager.ReloadFromFile(configFile); err != nil {
 			return api.BadDataErr(err, "reload failed")
 		}
 		return api.Data(nil)
 	}))
+	s.ginEngine.GET("/api/v1/status/config/", api.Wrap(lg, func(ctx *gin.Context) *api.Result {
+		return api.Data(gin.H{"yaml": string(s.cfgManager.ConfigInfo().RawContent)})
+	}))
+	s.ginEngine.POST(s.path("/api/v1/status/config/"), api.Wrap(lg, s.updateConfig))
 
 	return s
 }
@@ -127,6 +135,24 @@ func (s *Service) updateTargets(g *gin.Context) *api.Result {
 
 	if err := s.targetManager.UpdateTargets(r); err != nil {
 		return api.InternalErr(err, "")
+	}
+
+	return api.Data(nil)
+}
+
+func (s *Service) updateConfig(g *gin.Context) *api.Result {
+	if s.configFile != "" {
+		s.lg.Warnf("config file is set, raw content config update is not allowed")
+		return api.BadDataErr(fmt.Errorf("config file is set, raw content config update is not allowed"), "")
+	}
+
+	r := &shard.UpdateConfigRequest{}
+	if err := g.BindJSON(&r); err != nil {
+		return api.BadDataErr(err, "bind json")
+	}
+
+	if err := s.cfgManager.ReloadFromRaw([]byte(r.RawContent)); err != nil {
+		return api.BadDataErr(err, "reload failed")
 	}
 
 	return api.Data(nil)

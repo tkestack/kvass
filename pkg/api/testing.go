@@ -31,7 +31,7 @@ import (
 
 // TestCall create a httptest server and do http request to it
 // the data in params will be write to server and the ret in params is deemed to the Data of common Result
-func TestCall(t *testing.T, serveHTTP func(w http.ResponseWriter, req *http.Request), uri, method, data string, ret interface{}) *require.Assertions {
+func TestCall(t *testing.T, serveHTTP func(w http.ResponseWriter, req *http.Request), uri, method, data string, ret interface{}) (*require.Assertions, *Result) {
 	gin.SetMode(gin.ReleaseMode)
 	req := httptest.NewRequest(method, uri, strings.NewReader(data))
 	w := httptest.NewRecorder()
@@ -43,13 +43,14 @@ func TestCall(t *testing.T, serveHTTP func(w http.ResponseWriter, req *http.Requ
 	r := require.New(t)
 	body, err := ioutil.ReadAll(result.Body)
 	r.NoError(err)
-
+	resObj := &Result{Data: ret}
+	if len(body) != 0 {
+		_ = json.Unmarshal(body, resObj)
+	}
 	if ret != nil {
-		resObj := &Result{Data: ret}
-		r.NoError(json.Unmarshal(body, resObj), string(body))
 		r.Equal(StatusSuccess, resObj.Status)
 		r.Empty(resObj.Err)
 		r.Empty(resObj.ErrorType)
 	}
-	return r
+	return r, resObj
 }

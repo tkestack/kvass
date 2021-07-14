@@ -29,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"tkestack.io/kvass/pkg/shard"
-	"tkestack.io/kvass/pkg/utils/k8sutil"
 )
 
 // shardManager manager shards use kubernetes shardManager
@@ -73,7 +72,7 @@ func (s *shardManager) Shards() ([]*shard.Shard, error) {
 	ret := make([]*shard.Shard, 0)
 	for _, p := range pods.Items {
 		url := fmt.Sprintf("http://%s:%d", p.Status.PodIP, s.port)
-		ret = append(ret, shard.NewShard(p.Name, url, k8sutil.IsPodReady(&p), s.lg.WithField("shard", p.Name)))
+		ret = append(ret, shard.NewShard(p.Name, url, p.Status.PodIP != "", s.lg.WithField("shard", p.Name)))
 	}
 
 	return ret, nil

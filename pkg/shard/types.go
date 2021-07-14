@@ -51,3 +51,8 @@ type UpdateTargetsRequest struct {
 	// targets contains all targets this shard should scrape
 	Targets map[string][]*target.Target
 }
+
+// UpdateConfigRequest is request struct for POST /
+type UpdateConfigRequest struct {
+	RawContent string `json:"rawContent"`
+}

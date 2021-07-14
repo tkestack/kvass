@@ -18,10 +18,7 @@
 package main
 
 import (
-	"context"
-	"os"
 	"path"
-	"time"
 	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/sidecar"
 	"tkestack.io/kvass/pkg/target"
@@ -46,14 +43,22 @@ var sidecarCfg = struct {
 }{}
 
 func init() {
-	sidecarCmd.Flags().StringVar(&sidecarCfg.proxyAddress, "web.proxy-addr", ":8008", "proxy listen address")
-	sidecarCmd.Flags().StringVar(&sidecarCfg.apiAddress, "web.api-addr", ":8080", "api listen address")
-	sidecarCmd.Flags().StringVar(&sidecarCfg.prometheusURL, "prometheus.url", "http://127.0.0.1:9090", "url of target prometheus")
-	sidecarCmd.Flags().StringVar(&sidecarCfg.configFile, "config.file", "/etc/prometheus/config_out/prometheus.env.yaml", "origin config file")
-	sidecarCmd.Flags().StringVar(&sidecarCfg.configOutFile, "config.output-file", "/etc/prometheus/config_out/prometheus_injected.yaml", "injected config file")
-	sidecarCmd.Flags().StringVar(&sidecarCfg.storePath, "store.path", "/prometheus/", "path to save shard runtime")
-	sidecarCmd.Flags().StringVar(&sidecarCfg.injectProxyURL, "inject.proxy", "http://127.0.0.1:8008", "proxy url to inject to all job")
-	sidecarCmd.Flags().StringVar(&sidecarCfg.configInject.kubernetes.serviceAccountPath, "inject.kubernetes-sa-path", "", "change default service account token path")
+	sidecarCmd.Flags().StringVar(&sidecarCfg.proxyAddress, "web.proxy-addr", ":8008",
+		"proxy listen address")
+	sidecarCmd.Flags().StringVar(&sidecarCfg.apiAddress, "web.api-addr", ":8080",
+		"api listen address")
+	sidecarCmd.Flags().StringVar(&sidecarCfg.prometheusURL, "prometheus.url", "http://127.0.0.1:9090",
+		"url of target prometheus")
+	sidecarCmd.Flags().StringVar(&sidecarCfg.configFile, "config.file", "/etc/prometheus/config_out/prometheus.env.yaml",
+		"origin config file, set this empty to enable POST /api/v1/status/config to update config")
+	sidecarCmd.Flags().StringVar(&sidecarCfg.configOutFile, "config.output-file", "/etc/prometheus/config_out/prometheus_injected.yaml",
+		"injected config file")
+	sidecarCmd.Flags().StringVar(&sidecarCfg.storePath, "store.path", "/prometheus/",
+		"path to save shard runtime")
+	sidecarCmd.Flags().StringVar(&sidecarCfg.injectProxyURL, "inject.proxy", "http://127.0.0.1:8008",
+		"proxy url to inject to all job")
+	sidecarCmd.Flags().StringVar(&sidecarCfg.configInject.kubernetes.serviceAccountPath, "inject.kubernetes-sa-path", "",
+		"change default service account token path")
 	rootCmd.AddCommand(sidecarCmd)
 }
 
@@ -68,7 +73,7 @@ var sidecarCmd = &cobra.Command{
 		var (
 			lg            = log.New()
 			scrapeManager = scrape.New(log.WithField("component", "scrape manager"))
-			configManager = prom.NewConfigManager(sidecarCfg.configFile, log.WithField("component", "config manager"))
+			configManager = prom.NewConfigManager()
 			targetManager = sidecar.NewTargetsManager(sidecarCfg.storePath, log.WithField("component", "targets manager"))
 
 			proxy = sidecar.NewProxy(
@@ -102,6 +107,7 @@ var sidecarCmd = &cobra.Command{
 			})
 
 		service := sidecar.NewService(
+			sidecarCfg.configFile,
 			sidecarCfg.prometheusURL,
 			func() (i int64, e error) {
 				ts, err := promCli.TSDBInfo()
@@ -115,22 +121,13 @@ var sidecarCmd = &cobra.Command{
 			log.WithField("component", "web"),
 		)
 
-		for {
-			select {
-			case <-context.Background().Done():
-				os.Exit(1)
-			default:
+		if sidecarCfg.configFile != "" {
+			if err := configManager.ReloadFromFile(sidecarCfg.configFile); err != nil {
+				panic(err)
 			}
-
-			if err := configManager.Reload(); err != nil {
-				log.Infof(err.Error())
-				time.Sleep(time.Second)
-			} else {
-				break
-			}
+			lg.Infof("load config done")
 		}
 
-		lg.Infof("load config done")
 		if err := targetManager.Load(); err != nil {
 			panic(err)
 		}
@@ -141,6 +138,7 @@ var sidecarCmd = &cobra.Command{
 			lg.Infof("proxy start at %s", sidecarCfg.proxyAddress)
 			return proxy.Run(sidecarCfg.proxyAddress)
 		})
+
 		g.Go(func() error {
 			lg.Infof("sidecar server start at %s", sidecarCfg.apiAddress)
 			return service.Run(sidecarCfg.apiAddress)

@@ -31,6 +31,11 @@ import (
 )
 
 func TestTargetsManager_Load(t *testing.T) {
+	tn := time.Now()
+	timeNow = func() time.Time {
+		return tn
+	}
+
 	cases := []struct {
 		name            string
 		fileName        string
@@ -39,10 +44,14 @@ func TestTargetsManager_Load(t *testing.T) {
 		wantErr         bool
 	}{
 		{
-			name:            "all file not exist, don't return err",
-			fileName:        "", // empty fileName means file not exist
-			wantTargetsInfo: newTargetsInfo(),
-			wantErr:         false,
+			name:     "all file not exist, don't return err",
+			fileName: "", // empty fileName means file not exist
+			wantTargetsInfo: TargetsInfo{
+				Targets: map[string][]*target.Target{},
+				IdleAt:  types.TimePtr(tn),
+				Status:  map[uint64]*target.ScrapeStatus{},
+			},
+			wantErr: false,
 		},
 		{
 			name:         "old version file exist, not format wrong, must return err ",

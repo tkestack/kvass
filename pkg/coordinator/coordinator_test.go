@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 	"tkestack.io/kvass/pkg/discovery"
+	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/shard"
 	"tkestack.io/kvass/pkg/target"
 	"tkestack.io/kvass/pkg/utils/test"
@@ -567,8 +568,15 @@ func TestCoordinator_RunOnce(t *testing.T) {
 
 	for _, cs := range cases {
 		t.Run(cs.name, func(t *testing.T) {
-			c := NewCoordinator(&fakeReplicasManager{cs.shardManager}, cs.maxSeries, cs.maxShard, cs.minShard, cs.maxIdleTime, cs.period, func() string {
-				return ""
+			option := &Option{
+				MaxSeries:   cs.maxSeries,
+				MaxShard:    cs.maxShard,
+				MinShard:    cs.minShard,
+				MaxIdleTime: cs.maxIdleTime,
+				Period:      cs.period,
+			}
+			c := NewCoordinator(option, &fakeReplicasManager{cs.shardManager}, func() *prom.ConfigInfo {
+				return prom.DefaultConfig
 			}, cs.getExploreResult, cs.getActive, logrus.New())
 			require.NoError(t, c.runOnce())
 			cs.shardManager.assert(t)
@@ -614,8 +622,15 @@ func TestCoordinator_LastGlobalScrapeStatus(t *testing.T) {
 		}
 	}
 
-	c := NewCoordinator(&fakeReplicasManager{shardManager}, 100, 100, 100, 0, time.Second, func() string {
-		return ""
+	option := &Option{
+		MaxSeries:   100,
+		MaxShard:    100,
+		MinShard:    100,
+		MaxIdleTime: time.Second,
+		Period:      0,
+	}
+	c := NewCoordinator(option, &fakeReplicasManager{shardManager}, func() *prom.ConfigInfo {
+		return prom.DefaultConfig
 	}, getStatus, active, logrus.New())
 
 	r := require.New(t)
