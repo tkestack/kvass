@@ -25,7 +25,7 @@ test-coverage: ## Run tests with coverage
 	@cat cover.out >> coverage.txt
 
 build: dep ## Build the binary file
-	@GOOS=${GOOS} GOARCH=${GOARCH} go build -i -o kvass cmd/kvass/*.go
+	@GOOS=${GOOS} GOARCH=${GOARCH} go build -o kvass cmd/kvass/*.go
 
 clean: ## Remove previous build
 	@rm -fr kvass

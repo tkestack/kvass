@@ -95,10 +95,20 @@ func (s *Service) runtimeInfo(ctx *gin.Context) *api.Result {
 	})
 }
 
+// ExtendTarget extend Prometheus v1.Target
+type ExtendTarget struct {
+	// Target is Prometheus active target from /api/v1/targets
+	v1.Target
+	// Series is the avg series of last 5 scraping results
+	Series int64 `json:"series"`
+	// Shards contains ID of shards that is scraping this target
+	Shards []string `json:"shards"`
+}
+
 // TargetDiscovery has all the active targets.
 type TargetDiscovery struct {
 	// ActiveTargets contains all targets that should be scraped
-	ActiveTargets []*v1.Target `json:"activeTargets"`
+	ActiveTargets []*ExtendTarget `json:"activeTargets"`
 	// ActiveStatistics contains job's statistics number according to target health
 	ActiveStatistics []TargetStatistics `json:"activeStatistics,omitempty"`
 	// DroppedTargets contains all targets that been dropped from relabel
@@ -159,7 +169,7 @@ func (s *Service) getTargets(state string, statistics string, health []string, j
 	}
 
 	if !showActive || statistics == "only" {
-		res.ActiveTargets = []*v1.Target{}
+		res.ActiveTargets = []*ExtendTarget{}
 	}
 
 	if showDropped && statistics != "only" {
@@ -176,12 +186,12 @@ func (s *Service) getTargets(state string, statistics string, health []string, j
 	return res
 }
 
-func (s *Service) statisticActiveTargets(jobRegexp []*regexp.Regexp, health []string) ([]*v1.Target, []TargetStatistics) {
+func (s *Service) statisticActiveTargets(jobRegexp []*regexp.Regexp, health []string) ([]*ExtendTarget, []TargetStatistics) {
 	sts := make([]TargetStatistics, 0)
 	status := s.getScrapeStatus()
 	activeTargets := s.getActiveTargets()
 	activeKeys, numTargets := sortKeys(activeTargets)
-	targets := make([]*v1.Target, 0, numTargets)
+	targets := make([]*ExtendTarget, 0, numTargets)
 	for _, jobName := range activeKeys {
 		if filterJobName(jobName, jobRegexp) {
 			continue
@@ -233,17 +243,20 @@ func flatten(targets map[string][]*discovery.SDTargets) []*scrape.Target {
 	return res
 }
 
-func makeTarget(jobName string, target *scrape.Target, rt *target.ScrapeStatus) *v1.Target {
-	return &v1.Target{
-		DiscoveredLabels:   target.DiscoveredLabels().Map(),
-		Labels:             target.Labels().Map(),
-		ScrapePool:         jobName,
-		ScrapeURL:          target.URL().String(),
-		GlobalURL:          target.URL().String(),
-		LastError:          rt.LastError,
-		LastScrape:         rt.LastScrape,
-		LastScrapeDuration: rt.LastScrapeDuration,
-		Health:             rt.Health,
+func makeTarget(jobName string, target *scrape.Target, rt *target.ScrapeStatus) *ExtendTarget {
+	return &ExtendTarget{
+		Target: v1.Target{
+			DiscoveredLabels:   target.DiscoveredLabels().Map(),
+			Labels:             target.Labels().Map(),
+			ScrapePool:         jobName,
+			ScrapeURL:          target.URL().String(),
+			GlobalURL:          target.URL().String(),
+			LastError:          rt.LastError,
+			LastScrape:         rt.LastScrape,
+			LastScrapeDuration: rt.LastScrapeDuration,
+			Health:             rt.Health,
+		},
+		Series: rt.Series,
 	}
 }
 
