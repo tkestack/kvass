@@ -142,6 +142,7 @@ func (c *Coordinator) runOnce() error {
 			continue
 		}
 
+		lastGlobalScrapeStatus = c.updateScrapeStatusShards(shardsInfo, lastGlobalScrapeStatus)
 		newLastGlobalScrapeStatus = mergeScrapeStatus(newLastGlobalScrapeStatus, lastGlobalScrapeStatus)
 	}
 

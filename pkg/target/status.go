@@ -38,7 +38,9 @@ type ScrapeStatus struct {
 	TargetState string `json:"TargetState"`
 	// ScrapeTimes is the times target scraped by this shard
 	ScrapeTimes uint64 `json:"ScrapeTimes"`
-	lastSeries  []int64
+	// Shards contains ID of shards that is scraping this target
+	Shards     []string `json:"shards"`
+	lastSeries []int64
 }
 
 // SetScrapeErr mark the result of this scraping

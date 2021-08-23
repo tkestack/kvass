@@ -172,6 +172,18 @@ func (c *Coordinator) applyShardsInfo(shards []*shardInfo) {
 	_ = g.Wait()
 }
 
+func (c *Coordinator) updateScrapeStatusShards(shards []*shardInfo, status map[uint64]*target.ScrapeStatus) map[uint64]*target.ScrapeStatus {
+	for _, s := range shards {
+		if !s.changeAble {
+			continue
+		}
+		for k := range s.scraping {
+			status[k].Shards = append(status[k].Shards, s.shard.ID)
+		}
+	}
+	return status
+}
+
 // gcTargets delete targets with following conditions
 // 1. not exist in active targets
 // 2. is in_transfer state and had been scraped by other shard
@@ -500,7 +512,9 @@ func mergeScrapeStatus(a, b map[uint64]*target.ScrapeStatus) map[uint64]*target.
 			(old.Health != scrape.HealthGood && v.Health == scrape.HealthGood) ||
 			(v.Health == scrape.HealthGood && v.Series > old.Series) {
 			a[k] = v
+			old = v
 		}
+		old.Shards = append(old.Shards, v.Shards...)
 	}
 	return a
 }
