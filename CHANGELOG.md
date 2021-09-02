@@ -1,4 +1,13 @@
 
+## [v0.1.5] - 2021-09-02
+### Feat
+- extend /api/v1/targets detail ([#66](https://github.com/tkestack/kvass/issues/66))
+- support static shards ([#64](https://github.com/tkestack/kvass/issues/64))
+
+### Fix
+- fetching head series ([#53](https://github.com/tkestack/kvass/issues/53))
+
+
 ## [v0.1.4] - 2021-05-25
 ### Feat
 - coordinator skip upgrading statefulsets
