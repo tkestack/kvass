@@ -20,13 +20,13 @@ package scrape
 import (
 	"bytes"
 	"compress/gzip"
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/relabel"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
-
-	"github.com/prometheus/common/model"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -76,8 +76,11 @@ metrics0{code="201"} 2
 
 			u, _ := url.Parse("http://127.0.0.1:8080")
 			info := &JobInfo{
-				Cli:      ts.Client(),
-				Config:   &config.ScrapeConfig{JobName: "test"},
+				Cli: ts.Client(),
+				Config: &config.ScrapeConfig{
+					JobName:       "test",
+					ScrapeTimeout: model.Duration(time.Second),
+				},
 				proxyURL: u,
 			}
 

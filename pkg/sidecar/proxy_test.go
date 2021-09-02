@@ -17,6 +17,7 @@
 package sidecar
 
 import (
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
 	scrape2 "github.com/prometheus/prometheus/scrape"
 	"github.com/sirupsen/logrus"
@@ -26,6 +27,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/target"
 )
@@ -49,8 +51,11 @@ func TestProxy_ServeHTTP(t *testing.T) {
 			wantTargetStatus: map[uint64]*target.ScrapeStatus{},
 		},
 		{
-			name:             "invalid hash",
-			job:              &config.ScrapeConfig{JobName: "job1"},
+			name: "invalid hash",
+			job: &config.ScrapeConfig{
+				JobName:       "job1",
+				ScrapeTimeout: model.Duration(time.Second * 3),
+			},
 			status:           map[uint64]*target.ScrapeStatus{},
 			uri:              "/metrics?_jobName=job1&_scheme=http&_hash=xxxx",
 			wantStatusCode:   http.StatusBadRequest,
@@ -58,7 +63,10 @@ func TestProxy_ServeHTTP(t *testing.T) {
 		},
 		{
 			name: "scrape failed",
-			job:  &config.ScrapeConfig{JobName: "job1"},
+			job: &config.ScrapeConfig{
+				JobName:       "job1",
+				ScrapeTimeout: model.Duration(time.Second * 3),
+			},
 			status: map[uint64]*target.ScrapeStatus{
 				1: {},
 			},
@@ -75,7 +83,10 @@ func TestProxy_ServeHTTP(t *testing.T) {
 		},
 		{
 			name: "scrape success",
-			job:  &config.ScrapeConfig{JobName: "job1"},
+			job: &config.ScrapeConfig{
+				JobName:       "job1",
+				ScrapeTimeout: model.Duration(time.Second * 3),
+			},
 			status: map[uint64]*target.ScrapeStatus{
 				1: {},
 			},
