@@ -55,7 +55,6 @@ type JobInfo struct {
 	// proxyURL save old proxyURL set in ScrapeConfig if env SCRAPE_PROXY is not empty
 	// proxyURL will be saved in head "Origin-Proxy" when scrape request is send
 	proxyURL *url.URL
-	timeout  time.Duration
 }
 
 func newJobInfo(cfg config.ScrapeConfig) (*JobInfo, error) {
@@ -78,7 +77,6 @@ func newJobInfo(cfg config.ScrapeConfig) (*JobInfo, error) {
 		Cli:      client,
 		Config:   &cfg,
 		proxyURL: oldProxy.URL,
-		timeout:  time.Duration(cfg.ScrapeTimeout),
 	}, nil
 }
 
@@ -93,12 +91,12 @@ func (j *JobInfo) Scrape(url string) ([]byte, string, error) {
 	req.Header.Add("Accept", acceptHeader)
 	req.Header.Add("Accept-Encoding", "gzip")
 	req.Header.Set("User-Agent", userAgentHeader)
-	req.Header.Set("X-prometheusURL-Cli-Timeout-Seconds", fmt.Sprintf("%f", j.timeout.Seconds()))
+	req.Header.Set("X-prometheusURL-Cli-Timeout-Seconds", fmt.Sprintf("%f", time.Duration(j.Config.ScrapeTimeout).Seconds()))
 	if j.proxyURL != nil {
 		req.Header.Set("Origin-Proxy", j.proxyURL.String())
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), j.timeout)
+	ctx, _ := context.WithTimeout(context.Background(), time.Duration(j.Config.ScrapeTimeout))
 	resp, err := j.Cli.Do(req.WithContext(ctx))
 	if err != nil {
 		return nil, "", err

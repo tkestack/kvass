@@ -32,6 +32,5 @@ func TestManager(t *testing.T) {
 	s := ss.GetJob(cfg.JobName)
 	r.NotNil(s)
 
-	r.Equal(time.Second, s.timeout)
 	r.Equal(u.String(), s.proxyURL.String())
 }

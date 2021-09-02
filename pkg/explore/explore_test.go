@@ -61,7 +61,8 @@ func TestExplore_Run(t *testing.T) {
 		Config: &config.Config{
 			ScrapeConfigs: []*config.ScrapeConfig{
 				{
-					JobName: "job1",
+					JobName:       "job1",
+					ScrapeTimeout: model.Duration(time.Second * 3),
 				},
 			},
 		},
