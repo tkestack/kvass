@@ -257,6 +257,7 @@ func makeTarget(jobName string, target *scrape.Target, rt *target.ScrapeStatus) 
 			Health:             rt.Health,
 		},
 		Series: rt.Series,
+		Shards: rt.Shards,
 	}
 }
 

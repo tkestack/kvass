@@ -173,6 +173,9 @@ func (c *Coordinator) applyShardsInfo(shards []*shardInfo) {
 }
 
 func (c *Coordinator) updateScrapeStatusShards(shards []*shardInfo, status map[uint64]*target.ScrapeStatus) map[uint64]*target.ScrapeStatus {
+	for _, s := range status {
+		s.Shards = []string{}
+	}
 	for _, s := range shards {
 		if !s.changeAble {
 			continue
@@ -508,11 +511,16 @@ func (c *Coordinator) tryScaleUp(shard []*shardInfo, needSpace int64) int32 {
 func mergeScrapeStatus(a, b map[uint64]*target.ScrapeStatus) map[uint64]*target.ScrapeStatus {
 	for k, v := range b {
 		old := a[k]
-		if old == nil ||
-			(old.Health != scrape.HealthGood && v.Health == scrape.HealthGood) ||
-			(v.Health == scrape.HealthGood && v.Series > old.Series) {
+		if old == nil {
 			a[k] = v
-			old = v
+			continue
+		}
+
+		if (old.Health != scrape.HealthGood && v.Health == scrape.HealthGood) ||
+			(v.Health == scrape.HealthGood && v.Series > old.Series) {
+			sd := old.Shards
+			*old = *v
+			old.Shards = sd
 		}
 		old.Shards = append(old.Shards, v.Shards...)
 	}

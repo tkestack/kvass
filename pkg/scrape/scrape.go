@@ -21,6 +21,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -97,7 +98,8 @@ func (j *JobInfo) Scrape(url string) ([]byte, string, error) {
 		req.Header.Set("Origin-Proxy", j.proxyURL.String())
 	}
 
-	resp, err := j.Cli.Do(req)
+	ctx, _ := context.WithTimeout(context.Background(), j.timeout)
+	resp, err := j.Cli.Do(req.WithContext(ctx))
 	if err != nil {
 		return nil, "", err
 	}
