@@ -63,6 +63,7 @@ var cdCfg = struct {
 	syncInterval     time.Duration
 	sdInitTimeout    time.Duration
 	configInject     configInjectOption
+	logLevel 		 string
 }{}
 
 func init() {
@@ -103,6 +104,8 @@ func init() {
 		"ckube-apiserver proxy url to inject to all kubernetes sd")
 	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.serviceAccountPath, "inject.kubernetes-sa-path", "",
 		"change default service account token path")
+	coordinatorCmd.Flags().StringVar(&cdCfg.logLevel, "log.level", "info",
+		"log level")
 	rootCmd.AddCommand(coordinatorCmd)
 }
 
@@ -113,6 +116,11 @@ var coordinatorCmd = &cobra.Command{
 distribution targets to shards`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := cmd.Flags().Parse(args); err != nil {
+			return err
+		}
+
+		logLevel, err := logrus.ParseLevel(cdCfg.logLevel)
+		if err != nil {
 			return err
 		}
 
@@ -173,6 +181,8 @@ distribution targets to shards`,
 			targetDiscovery.DropTargets,
 			lg.WithField("component", "web"),
 		)
+
+		lg.Level = logLevel
 
 		if err := cfgManager.ReloadFromFile(cdCfg.configFile); err != nil {
 			panic(err)
