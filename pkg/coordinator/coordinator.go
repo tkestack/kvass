@@ -164,7 +164,7 @@ func (c *Coordinator) runOnce() error {
 	return nil
 }
 
-// Run do rebalance periodically until ctx done
+// RunRebalance do rebalance periodically until ctx done
 func (c *Coordinator) RunRebalance(ctx context.Context) error {
 	return wait.RunUntil(ctx, c.log, c.option.RebalancePeriod, c.runRebalanceOnce)
 }
