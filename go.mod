@@ -8,6 +8,7 @@ require (
 	github.com/gin-gonic/gin v1.6.3
 	github.com/go-kit/kit v0.10.0
 	github.com/gobuffalo/packr/v2 v2.2.0
+	github.com/grd/statistics v0.0.0-20130405091615-5af75da930c9
 	github.com/mitchellh/hashstructure/v2 v2.0.1
 	github.com/mroth/weightedrand v0.4.1
 	github.com/pkg/errors v0.9.1

@@ -47,23 +47,25 @@ import (
 )
 
 var cdCfg = struct {
-	shardType        string
-	shardStaticFile  string
-	shardNamespace   string
-	shardSelector    string
-	shardPort        int
-	shardMaxSeries   int64
-	shardMinShard    int32
-	shardMaxShard    int32
-	shardMaxIdleTime time.Duration
-	shardDeletePVC   bool
-	exploreMaxCon    int
-	webAddress       string
-	configFile       string
-	syncInterval     time.Duration
-	sdInitTimeout    time.Duration
-	configInject     configInjectOption
-	logLevel 		 string
+	shardType         string
+	shardStaticFile   string
+	shardNamespace    string
+	shardSelector     string
+	shardPort         int
+	shardMaxSeries    int64
+	shardMinShard     int32
+	shardMaxShard     int32
+	shardMaxIdleTime  time.Duration
+	shardDeletePVC    bool
+	exploreMaxCon     int
+	webAddress        string
+	configFile        string
+	syncInterval      time.Duration
+	sdInitTimeout     time.Duration
+	configInject      configInjectOption
+	logLevel 		  string
+	rebalanceEnable   bool
+	rebalanceInterval time.Duration
 }{}
 
 func init() {
@@ -106,6 +108,10 @@ func init() {
 		"change default service account token path")
 	coordinatorCmd.Flags().StringVar(&cdCfg.logLevel, "log.level", "info",
 		"log level")
+	coordinatorCmd.Flags().BoolVar(&cdCfg.rebalanceEnable, "coordinator.rebalance-enable", false,
+		"coordinator will rebalance the targets of every job")
+	coordinatorCmd.Flags().DurationVar(&cdCfg.rebalanceInterval, "coordinator.rebalance-interval", time.Minute*5,
+		"the interval of coordinator rebalance loop")
 	rootCmd.AddCommand(coordinatorCmd)
 }
 
@@ -144,11 +150,12 @@ distribution targets to shards`,
 
 			cd = coordinator.NewCoordinator(
 				&coordinator.Option{
-					MaxSeries:   cdCfg.shardMaxSeries,
-					MaxShard:    cdCfg.shardMaxShard,
-					MinShard:    cdCfg.shardMinShard,
-					MaxIdleTime: cdCfg.shardMaxIdleTime,
-					Period:      cdCfg.syncInterval,
+					MaxSeries:       cdCfg.shardMaxSeries,
+					MaxShard:        cdCfg.shardMaxShard,
+					MinShard:        cdCfg.shardMinShard,
+					MaxIdleTime:     cdCfg.shardMaxIdleTime,
+					Period:          cdCfg.syncInterval,
+					RebalancePeriod: cdCfg.rebalanceInterval,
 				},
 				getReplicasManager(lg),
 				cfgManager.ConfigInfo,
@@ -222,6 +229,13 @@ distribution targets to shards`,
 			lg.Infof("coordinator start")
 			return cd.Run(ctx)
 		})
+
+		if cdCfg.rebalanceEnable {
+			g.Go(func() error {
+				lg.Infof("rebalance start")
+				return cd.RunRebalance(ctx)
+			})
+		}
 
 		g.Go(func() error {
 			lg.Infof("api start at %s", cdCfg.webAddress)
