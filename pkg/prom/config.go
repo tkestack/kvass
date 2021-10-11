@@ -19,6 +19,7 @@ package prom
 
 import (
 	"fmt"
+	"github.com/go-kit/log"
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pkg/errors"
 	"github.com/prometheus/prometheus/config"
@@ -83,7 +84,7 @@ func (c *ConfigManager) ReloadFromRaw(data []byte) (err error) {
 		return errors.New("config content is empty")
 	}
 
-	info.Config, err = config.Load(string(data))
+	info.Config, err = config.Load(string(data), true, log.NewNopLogger())
 	if err != nil {
 		return errors.Wrapf(err, "marshal config")
 	}

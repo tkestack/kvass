@@ -17,6 +17,7 @@
 package sidecar
 
 import (
+	"github.com/go-kit/log"
 	"github.com/prometheus/common/model"
 	"os"
 	"path"
@@ -78,7 +79,7 @@ remote_read:
 	r.NoError(in.UpdateTargets(map[string][]*target.Target{
 		"job": {tar},
 	}))
-	out, err := config.LoadFile(outFile)
+	out, err := config.LoadFile(outFile, true, log.NewNopLogger())
 	r.NoError(err)
 
 	outJob := out.ScrapeConfigs[0]
