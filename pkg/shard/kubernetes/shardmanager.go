@@ -69,8 +69,15 @@ func (s *shardManager) Shards() ([]*shard.Shard, error) {
 		return nil, errors.Wrap(err, "list pod")
 	}
 
-	ret := make([]*shard.Shard, 0)
+	ps := map[string]v1.Pod{}
+
 	for _, p := range pods.Items {
+		ps[p.Name] = p
+	}
+
+	ret := make([]*shard.Shard, 0)
+	for index := range pods.Items {
+		p := ps[fmt.Sprintf("%s-%d", s.sts.Name, index)]
 		url := fmt.Sprintf("http://%s:%d", p.Status.PodIP, s.port)
 		ret = append(ret, shard.NewShard(p.Name, url, p.Status.PodIP != "", s.lg.WithField("shard", p.Name)))
 	}
