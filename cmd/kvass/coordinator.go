@@ -47,25 +47,28 @@ import (
 )
 
 var cdCfg = struct {
-	shardType        string
-	shardStaticFile  string
-	shardNamespace   string
-	shardSelector    string
-	shardPort        int
-	shardMaxSeries   int64
-	shardMinShard    int32
-	shardMaxShard    int32
-	shardMaxIdleTime time.Duration
-	shardDeletePVC   bool
-	exploreMaxCon    int
-	webAddress       string
-	configFile       string
-	syncInterval     time.Duration
-	sdInitTimeout    time.Duration
-	configInject     configInjectOption
+	shardType             string
+	shardStaticFile       string
+	shardNamespace        string
+	shardSelector         string
+	shardPort             int
+	shardMaxSeries        int64
+	shardMinShard         int32
+	shardMaxShard         int32
+	shardMaxIdleTime      time.Duration
+	shardDisableAlleviate bool
+	shardDeletePVC        bool
+	exploreMaxCon         int
+	webAddress            string
+	configFile            string
+	syncInterval          time.Duration
+	sdInitTimeout         time.Duration
+	configInject          configInjectOption
 }{}
 
 func init() {
+	coordinatorCmd.Flags().BoolVar(&cdCfg.shardDisableAlleviate, "shard.disable-alleviate", false,
+		"disable shard alleviation when shard is overload")
 	coordinatorCmd.Flags().StringVar(&cdCfg.shardType, "shard.type", "k8s",
 		"type of shard deploy: 'k8s'(default), 'static'")
 	coordinatorCmd.Flags().StringVar(&cdCfg.shardStaticFile, "shard.static-file", "static-shards.yaml",
@@ -136,11 +139,12 @@ distribution targets to shards`,
 
 			cd = coordinator.NewCoordinator(
 				&coordinator.Option{
-					MaxSeries:   cdCfg.shardMaxSeries,
-					MaxShard:    cdCfg.shardMaxShard,
-					MinShard:    cdCfg.shardMinShard,
-					MaxIdleTime: cdCfg.shardMaxIdleTime,
-					Period:      cdCfg.syncInterval,
+					MaxSeries:        cdCfg.shardMaxSeries,
+					MaxShard:         cdCfg.shardMaxShard,
+					MinShard:         cdCfg.shardMinShard,
+					MaxIdleTime:      cdCfg.shardMaxIdleTime,
+					Period:           cdCfg.syncInterval,
+					DisableAlleviate: cdCfg.shardDisableAlleviate,
 				},
 				getReplicasManager(lg),
 				cfgManager.ConfigInfo,
