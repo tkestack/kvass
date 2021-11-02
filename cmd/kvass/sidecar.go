@@ -32,14 +32,15 @@ import (
 )
 
 var sidecarCfg = struct {
-	configFile     string
-	configOutFile  string
-	proxyAddress   string
-	apiAddress     string
-	prometheusURL  string
-	storePath      string
-	injectProxyURL string
-	configInject   configInjectOption
+	configFile      string
+	configOutFile   string
+	proxyAddress    string
+	apiAddress      string
+	prometheusURL   string
+	storePath       string
+	injectProxyURL  string
+	fetchHeadSeries bool
+	configInject    configInjectOption
 }{}
 
 func init() {
@@ -59,6 +60,10 @@ func init() {
 		"proxy url to inject to all job")
 	sidecarCmd.Flags().StringVar(&sidecarCfg.configInject.kubernetes.serviceAccountPath, "inject.kubernetes-sa-path", "",
 		"change default service account token path")
+	sidecarCmd.Flags().BoolVar(&sidecarCfg.fetchHeadSeries, "shard.fetch-head-series", true,
+		"if true, prometheus head series will be used as runtimeinfo.HeadSeries."+
+			"otherwise, the sum of all scraping targets series will be used."+
+			"must set false if use vmagent (or other scraping agent) instead of prometheus.")
 	rootCmd.AddCommand(sidecarCmd)
 }
 
@@ -110,10 +115,15 @@ var sidecarCmd = &cobra.Command{
 			sidecarCfg.configFile,
 			sidecarCfg.prometheusURL,
 			func() (i int64, e error) {
+				if !sidecarCfg.fetchHeadSeries {
+					return 0, nil
+				}
+
 				ts, err := promCli.TSDBInfo()
 				if err != nil {
 					return 0, err
 				}
+
 				return ts.HeadStats.NumSeries, nil
 			},
 			configManager,

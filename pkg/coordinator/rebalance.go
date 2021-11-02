@@ -230,6 +230,10 @@ func (c *Coordinator) gcTargets(changeAbleShards []*shardInfo, active map[uint64
 // make expect series of targets less than maxSeries * 0.2 if current head series > maxSeries 1.6
 // remove all targets if current head series > maxSeries 1.8
 func (c *Coordinator) alleviateShards(changeAbleShards []*shardInfo) (needSpace int64) {
+	if c.option.DisableAlleviate {
+		return 0
+	}
+
 	var threshold = []struct {
 		maxSeriesRate    float64
 		expectSeriesRate float64

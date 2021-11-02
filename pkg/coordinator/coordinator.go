@@ -43,6 +43,8 @@ type Option struct {
 	MaxIdleTime time.Duration
 	// Period is the interval between every coordinating
 	Period time.Duration
+	// DisableAlleviate disable shard alleviation when shard is overload
+	DisableAlleviate bool
 }
 
 // Coordinator periodically re balance all replicates
