@@ -71,8 +71,10 @@ l1:
 	for {
 		select {
 		case <-t.C:
+			m.targetsLock.Lock()
 			for job := range m.config {
 				if _, exist := m.activeTargets[job]; !exist {
+					m.targetsLock.Unlock()
 					continue l1
 				}
 				if !flag[job] {
@@ -81,6 +83,7 @@ l1:
 				}
 			}
 			m.log.Infof("all job first service discovery done")
+			m.targetsLock.Unlock()
 			return nil
 		case <-ctx.Done():
 			return nil
@@ -165,10 +168,8 @@ func (m *TargetsDiscovery) Run(ctx context.Context, sdChan <-chan map[string][]*
 }
 
 func (m *TargetsDiscovery) translateTargets(targets map[string][]*targetgroup.Group) map[string][]*SDTargets {
-	m.targetsLock.Lock()
-	defer m.targetsLock.Unlock()
-
-	res := map[string][]*SDTargets{}
+	actives := map[string][]*SDTargets{}
+	drops := map[string][]*SDTargets{}
 	for job, tsg := range targets {
 		allActive := make([]*SDTargets, 0)
 		allDrop := make([]*SDTargets, 0)
@@ -194,10 +195,20 @@ func (m *TargetsDiscovery) translateTargets(targets map[string][]*targetgroup.Gr
 				}
 			}
 		}
-		res[job] = allActive
-		m.activeTargets[job] = allActive
-		m.dropTargets[job] = allDrop
+		actives[job] = allActive
+		drops[job] = allDrop
 	}
 
-	return res
+	m.targetsLock.Lock()
+	defer m.targetsLock.Unlock()
+
+	for job, targets := range actives {
+		m.activeTargets[job] = targets
+	}
+
+	for job, targets := range drops {
+		m.dropTargets[job] = targets
+	}
+
+	return actives
 }
