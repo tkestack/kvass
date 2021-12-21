@@ -90,7 +90,7 @@ func init() {
 			"scale down is disabled if this flag is 0")
 	coordinatorCmd.Flags().BoolVar(&cdCfg.shardDeletePVC, "shard.delete-pvc", true,
 		"kvass will delete pvc when shard is removed")
-	coordinatorCmd.Flags().IntVar(&cdCfg.exploreMaxCon, "explore.concurrence", 1000,
+	coordinatorCmd.Flags().IntVar(&cdCfg.exploreMaxCon, "explore.concurrence", 200,
 		"max explore concurrence")
 	coordinatorCmd.Flags().StringVar(&cdCfg.webAddress, "web.address", ":9090",
 		"server bind address")
