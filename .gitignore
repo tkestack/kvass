@@ -1,3 +1,5 @@
 /bin/
 .idea
 build
+coverage.txt
+cover.out

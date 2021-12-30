@@ -6,7 +6,7 @@ GOOS := "linux"
 GOARCH := "amd64"
 .PHONY: all dep lint vet test test-coverage build clean
 
-all: build
+all: test-coverage lint vet  build
 
 dep: ## Get the dependencies
 	@go mod download

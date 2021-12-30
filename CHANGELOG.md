@@ -1,15 +1,3 @@
-
-## [v0.1.5] - 2021-10-11
-### Feat
-- support-http-sd ([#74](https://github.com/tkestack/kvass/issues/74))
-- extend /api/v1/targets detail ([#66](https://github.com/tkestack/kvass/issues/66))
-- support static shards ([#64](https://github.com/tkestack/kvass/issues/64))
-
-### Fix
-- some unit test ([#68](https://github.com/tkestack/kvass/issues/68))
-- fetching head series ([#53](https://github.com/tkestack/kvass/issues/53))
-
-
 ## [v0.1.4] - 2021-05-25
 ### Feat
 - coordinator skip upgrading statefulsets

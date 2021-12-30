@@ -20,17 +20,19 @@ package explore
 import (
 	"context"
 	"fmt"
+
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/protoparser/prometheus"
 	"tkestack.io/kvass/pkg/discovery"
 	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/utils/types"
 
+	"sync"
+	"time"
+
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
-	"sync"
-	"time"
 	"tkestack.io/kvass/pkg/target"
 )
 
@@ -185,8 +187,7 @@ func (e *Explore) exploreOnce(ctx context.Context, t *exploringTarget) (err erro
 
 func explore(log logrus.FieldLogger, scrapeInfo *scrape.JobInfo, url string) (int64, error) {
 	scraper := scrape.NewScraper(scrapeInfo, url, log)
-	_, err := scraper.RequestTo()
-	if err != nil {
+	if err := scraper.RequestTo(); err != nil {
 		return 0, errors.Wrap(err, "request to ")
 	}
 

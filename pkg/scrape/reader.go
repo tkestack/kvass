@@ -1,39 +1,39 @@
 package scrape
 
-import "io"
+import (
+	"io"
+)
 
-func wrapReader(reader io.ReadCloser, writer ...io.Writer) io.ReadCloser {
+func wrapReader(reader io.ReadCloser, writer ...io.Writer) *wrappedReader {
 	return &wrappedReader{
 		reader: reader,
 		writer: writer,
 	}
 }
 
+// wrappedReader copy data to writer when Read is called
 type wrappedReader struct {
 	reader io.ReadCloser
 	writer []io.Writer
 }
 
+// Read implement io.Reader
 func (w *wrappedReader) Read(p []byte) (n int, err error) {
-	n, err = w.reader.Read(p)
-	if err != nil {
-		return n, err
-	}
-
+	n, rerr := w.reader.Read(p)
 	for _, w := range w.writer {
 		wTotal := 0
 		for wTotal < n {
-			wn, err := w.Write(p[wTotal:])
-			if err != nil {
-				return n, err
+			wn, werr := w.Write(p[wTotal:n])
+			if werr != nil {
+				return n, werr
 			}
 			wTotal += wn
 		}
 	}
-
-	return 0, nil
+	return n, rerr
 }
 
+// Close implement io.Closer
 func (w *wrappedReader) Close() error {
 	return w.reader.Close()
 }

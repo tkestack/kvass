@@ -17,18 +17,20 @@
 package sidecar
 
 import (
-	"github.com/go-kit/log"
-	"github.com/prometheus/common/model"
 	"os"
 	"path"
+
+	"github.com/go-kit/log"
+	"github.com/prometheus/common/model"
 	"tkestack.io/kvass/pkg/prom"
+
+	"testing"
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"testing"
 	"tkestack.io/kvass/pkg/target"
 )
 
@@ -91,8 +93,6 @@ remote_read:
 	r.Equal(model.LabelValue("https"), outSD.Labels[model.ParamLabelPrefix+paramScheme])
 	r.Equal(model.LabelValue("job"), outSD.Labels[model.ParamLabelPrefix+paramJobName])
 	r.Equal(model.LabelValue("1"), outSD.Labels[model.ParamLabelPrefix+paramHash])
-	r.Equal("write", string(out.RemoteWriteConfigs[0].HTTPClientConfig.BearerToken))
-	r.Equal("read", string(out.RemoteReadConfigs[0].HTTPClientConfig.BearerToken))
 
 	outSelf := out.ScrapeConfigs[1]
 	outSelfSD := outSelf.ServiceDiscoveryConfigs[0].(discovery.StaticConfig)[0]

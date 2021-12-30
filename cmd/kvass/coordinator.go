@@ -20,6 +20,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"path"
+	"time"
+
 	"github.com/go-kit/kit/log"
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/promlog"
@@ -29,9 +33,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
-	"net/url"
-	"path"
-	"time"
 	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/shard"
 	"tkestack.io/kvass/pkg/shard/static"
@@ -103,7 +104,7 @@ func init() {
 	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.url, "inject.kubernetes-url", "",
 		"kube-apiserver url to inject to all kubernetes sd")
 	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.proxy, "inject.kubernetes-proxy", "",
-		"ckube-apiserver proxy url to inject to all kubernetes sd")
+		"kube-apiserver proxy url to inject to all kubernetes sd")
 	coordinatorCmd.Flags().StringVar(&cdCfg.configInject.kubernetes.serviceAccountPath, "inject.kubernetes-sa-path", "",
 		"change default service account token path")
 	rootCmd.AddCommand(coordinatorCmd)
@@ -207,7 +208,8 @@ distribution targets to shards`,
 			return exp.Run(ctx, cdCfg.exploreMaxCon)
 		})
 
-		tCtx, _ := context.WithTimeout(ctx, cdCfg.sdInitTimeout)
+		tCtx, cancel := context.WithTimeout(ctx, cdCfg.sdInitTimeout)
+		defer cancel()
 		if err := targetDiscovery.WaitInit(tCtx); err != nil {
 			panic(err)
 		}

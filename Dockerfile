@@ -1,4 +1,3 @@
-FROM byrnedo/alpine-curl
+FROM ubuntu:latest
 COPY kvass /kvass
-
 ENTRYPOINT ["/kvass"]

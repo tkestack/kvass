@@ -19,12 +19,13 @@ package sidecar
 
 import (
 	"fmt"
-	"github.com/VictoriaMetrics/VictoriaMetrics/lib/protoparser/prometheus"
 	"net/http"
 	"net/url"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/VictoriaMetrics/VictoriaMetrics/lib/protoparser/prometheus"
 	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/target"
 
@@ -86,24 +87,26 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if scrapErr != nil {
+			p.log.Errorf(scrapErr.Error())
 			w.WriteHeader(http.StatusBadRequest)
 		}
 	}()
 
 	scraper := scrape.NewScraper(jobInfo, realURL.String(), p.log)
 	scraper.WithRawWriter(w)
-	contentType, err := scraper.RequestTo()
-	if err != nil {
+	if err := scraper.RequestTo(); err != nil {
 		scrapErr = fmt.Errorf("RequestTo %v", err)
+		return
 	}
-	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Type", scraper.HTTPResponse.Header.Get("Content-Type"))
 
 	series := int64(0)
 	if err := scraper.ParseResponse(func(rows []prometheus.Row) error {
 		series += scrape.StatisticSeries(rows, jobInfo.Config.MetricRelabelConfigs)
+		return nil
 	}); err != nil {
 		scrapErr = fmt.Errorf("copy data to prometheus failed %v", err)
-		if time.Now().Sub(start) > time.Duration(jobInfo.Config.ScrapeTimeout) {
+		if time.Since(start) > time.Duration(jobInfo.Config.ScrapeTimeout) {
 			scrapErr = fmt.Errorf("scrape timeout")
 		}
 		return
