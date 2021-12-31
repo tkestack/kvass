@@ -18,21 +18,10 @@
 package scrape
 
 import (
-	"bufio"
-	"bytes"
-	"compress/gzip"
-	"context"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
-	"time"
-
-	"github.com/prometheus/prometheus/pkg/labels"
-	"github.com/prometheus/prometheus/pkg/relabel"
-	"github.com/prometheus/prometheus/pkg/textparse"
 
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/version"
@@ -78,80 +67,4 @@ func newJobInfo(cfg config.ScrapeConfig) (*JobInfo, error) {
 		Config:   &cfg,
 		proxyURL: oldProxy.URL,
 	}, nil
-}
-
-// Scrape scrape a url and return origin metrics data and contentType
-func (j *JobInfo) Scrape(url string) ([]byte, string, error) {
-	buf := bytes.NewBuffer(make([]byte, 0))
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, "", err
-	}
-	req.Header.Add("Accept", acceptHeader)
-	req.Header.Add("Accept-Encoding", "gzip")
-	req.Header.Set("User-Agent", userAgentHeader)
-	req.Header.Set("X-prometheusURL-Cli-Timeout-Seconds", fmt.Sprintf("%f", time.Duration(j.Config.ScrapeTimeout).Seconds()))
-	if j.proxyURL != nil {
-		req.Header.Set("Origin-Proxy", j.proxyURL.String())
-	}
-
-	ctx, _ := context.WithTimeout(context.Background(), time.Duration(j.Config.ScrapeTimeout))
-	resp, err := j.Cli.Do(req.WithContext(ctx))
-	if err != nil {
-		return nil, "", err
-	}
-	defer func() {
-		io.Copy(ioutil.Discard, resp.Body)
-		resp.Body.Close()
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, "", errors.Errorf("server returned HTTP status %s", resp.Status)
-	}
-
-	if resp.Header.Get("Content-Encoding") != "gzip" {
-		_, err = io.Copy(buf, resp.Body)
-		if err != nil {
-			return nil, "", err
-		}
-		return buf.Bytes(), resp.Header.Get("Content-Type"), nil
-	}
-
-	gzipr, err := gzip.NewReader(bufio.NewReader(resp.Body))
-	if err != nil {
-		return nil, "", err
-	}
-
-	_, err = io.Copy(buf, gzipr)
-	gzipr.Close()
-	if err != nil {
-		return nil, "", err
-	}
-	return buf.Bytes(), resp.Header.Get("Content-Type"), nil
-}
-
-// StatisticSeries statistic load from metrics raw data
-func StatisticSeries(b []byte, contentType string, rc []*relabel.Config) (total int64, err error) {
-	var (
-		p  = textparse.New(b, contentType)
-		et textparse.Entry
-	)
-	for {
-		if et, err = p.Next(); err != nil {
-			if err == io.EOF {
-				err = nil
-			}
-			return total, err
-		}
-
-		switch et {
-		case textparse.EntrySeries:
-			var lset labels.Labels
-			_ = p.Metric(&lset)
-			if newSets := relabel.Process(lset, rc...); newSets != nil {
-				total++
-			}
-		}
-	}
 }

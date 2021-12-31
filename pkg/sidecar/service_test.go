@@ -19,15 +19,16 @@ package sidecar
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"path"
 	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
 	"tkestack.io/kvass/pkg/api"
 	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/shard"
@@ -129,7 +130,7 @@ scrape_configs:
     - 127.0.0.1:9091`,
 			wantAPIResult: api.Data(&shard.RuntimeInfo{
 				HeadSeries:  10,
-				ConfigHash:  "16887931695534343218",
+				ConfigHash:  "16727296455050936695",
 				IdleStartAt: nil,
 			}),
 		},
@@ -158,7 +159,7 @@ scrape_configs:
     - 127.0.0.1:9091`,
 			wantAPIResult: api.Data(&shard.RuntimeInfo{
 				HeadSeries:  100,
-				ConfigHash:  "16887931695534343218",
+				ConfigHash:  "16727296455050936695",
 				IdleStartAt: nil,
 			}),
 		},

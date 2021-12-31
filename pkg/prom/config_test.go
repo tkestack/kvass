@@ -18,10 +18,11 @@
 package prom
 
 import (
-	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"path"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestConfigManager_ReloadFromFile(t *testing.T) {
@@ -98,7 +99,7 @@ scrape_configs:
 			m.AddReloadCallbacks(func(cfg *ConfigInfo) error {
 				updated = true
 				r.Equal(string(cfg.RawContent), c.content)
-				r.Equal("16887931695534343218", cfg.ConfigHash)
+				r.Equal("16727296455050936695", cfg.ConfigHash)
 				r.Equal(1, len(cfg.Config.ScrapeConfigs))
 				return nil
 			})

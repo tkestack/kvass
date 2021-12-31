@@ -19,14 +19,15 @@ package discovery
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"github.com/prometheus/prometheus/pkg/relabel"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/target"
 )
@@ -67,7 +68,8 @@ func TestTargetsDiscovery_WaitInit(t *testing.T) {
 				Config: cfg,
 			}))
 			d.activeTargets = cs.targets
-			ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+			defer cancel()
 			r.NoError(d.WaitInit(ctx))
 			r.Equal(cs.wantTimeout, ctx.Err() != nil)
 		})

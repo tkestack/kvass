@@ -19,6 +19,7 @@ package main
 
 import (
 	"path"
+
 	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/sidecar"
 	"tkestack.io/kvass/pkg/target"
@@ -51,7 +52,7 @@ func init() {
 	sidecarCmd.Flags().StringVar(&sidecarCfg.prometheusURL, "prometheus.url", "http://127.0.0.1:9090",
 		"url of target prometheus")
 	sidecarCmd.Flags().StringVar(&sidecarCfg.configFile, "config.file", "/etc/prometheus/config_out/prometheus.env.yaml",
-		"origin config file, set this empty to enable POST /api/v1/status/config to update config")
+		"origin config file, set this empty to enable updating config from coordinator")
 	sidecarCmd.Flags().StringVar(&sidecarCfg.configOutFile, "config.output-file", "/etc/prometheus/config_out/prometheus_injected.yaml",
 		"injected config file")
 	sidecarCmd.Flags().StringVar(&sidecarCfg.storePath, "store.path", "/prometheus/",

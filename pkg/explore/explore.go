@@ -20,16 +20,19 @@ package explore
 import (
 	"context"
 	"fmt"
+
+	"github.com/VictoriaMetrics/VictoriaMetrics/lib/protoparser/prometheus"
 	"tkestack.io/kvass/pkg/discovery"
 	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/utils/types"
 
+	"sync"
+	"time"
+
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
-	"sync"
-	"time"
 	"tkestack.io/kvass/pkg/target"
 )
 
@@ -50,7 +53,7 @@ type Explore struct {
 
 	retryInterval time.Duration
 	needExplore   chan *exploringTarget
-	explore       func(scrapeInfo *scrape.JobInfo, url string) (int64, error)
+	explore       func(log logrus.FieldLogger, scrapeInfo *scrape.JobInfo, url string) (int64, error)
 }
 
 // New create a new Explore
@@ -172,7 +175,7 @@ func (e *Explore) exploreOnce(ctx context.Context, t *exploringTarget) (err erro
 	}
 
 	url := t.target.URL(info.Config).String()
-	series, err := e.explore(info, url)
+	series, err := e.explore(e.logger, info, url)
 	if err != nil {
 		return errors.Wrapf(err, "explore failed : %s/%s", t.job, url)
 	}
@@ -182,10 +185,15 @@ func (e *Explore) exploreOnce(ctx context.Context, t *exploringTarget) (err erro
 	return nil
 }
 
-func explore(scrapeInfo *scrape.JobInfo, url string) (int64, error) {
-	data, typ, err := scrapeInfo.Scrape(url)
-	if err != nil {
-		return 0, err
+func explore(log logrus.FieldLogger, scrapeInfo *scrape.JobInfo, url string) (int64, error) {
+	scraper := scrape.NewScraper(scrapeInfo, url, log)
+	if err := scraper.RequestTo(); err != nil {
+		return 0, errors.Wrap(err, "request to ")
 	}
-	return scrape.StatisticSeries(data, typ, scrapeInfo.Config.MetricRelabelConfigs)
+
+	total := int64(0)
+	return total, scraper.ParseResponse(func(rows []prometheus.Row) error {
+		total += scrape.StatisticSeries(rows, scrapeInfo.Config.MetricRelabelConfigs)
+		return nil
+	})
 }
