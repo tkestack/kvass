@@ -26,6 +26,7 @@ import (
 	"tkestack.io/kvass/pkg/utils/test"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
 	"github.com/stretchr/testify/require"
@@ -86,8 +87,15 @@ func TestWrap(t *testing.T) {
 	for _, cs := range cases {
 		t.Run(cs.name, func(t *testing.T) {
 			r := require.New(t)
+
+			hg := prometheus.NewHistogram(prometheus.HistogramOpts{
+				Name:    "test",
+				Help:    "HTTP latency distributions.",
+				Buckets: prometheus.LinearBuckets(0.1, 0.2, 20),
+			})
+
 			e := gin.Default()
-			e.GET("/test", Wrap(logrus.New(), func(ctx *gin.Context) *Result {
+			e.GET("/test", Wrap(logrus.New(), hg, func(ctx *gin.Context) *Result {
 				return cs.result
 			}))
 

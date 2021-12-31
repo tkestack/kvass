@@ -20,6 +20,7 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 )
 
@@ -78,10 +79,34 @@ const (
 	ErrorInternal ErrorType = "internal"
 )
 
+// NewHistogram return a standard
+func NewHistogram(name string) *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    name,
+		Help:    "HTTP latency distributions.",
+		Buckets: prometheus.LinearBuckets(0.1, 0.2, 20),
+	}, []string{"path", "code"})
+}
+
+// APIWrapper wrap a function as standard kvass api
+type APIWrapper struct {
+	log logrus.FieldLogger
+	sts *prometheus.HistogramVec
+}
+
+// NewWrapper create a new APIWrapper
+func NewAPIWrapper(lg logrus.FieldLogger, sts *prometheus.HistogramVec) *APIWrapper {
+	return &APIWrapper{
+		log: lg,
+		sts: sts,
+	}
+}
+
 // Wrap return a gin handler function with common result processed
-func Wrap(log logrus.FieldLogger, f func(ctx *gin.Context) *Result) func(ctx *gin.Context) {
+func (a *APIWrapper) Wrap(f func(ctx *gin.Context) *Result) func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		r := f(ctx)
+
 		if r == nil {
 			ctx.Status(200)
 			return
@@ -89,7 +114,7 @@ func Wrap(log logrus.FieldLogger, f func(ctx *gin.Context) *Result) func(ctx *gi
 
 		code := 200
 		if r.ErrorType != "" {
-			log.Error(r.Err)
+			a.log.Error(r.Err)
 			code = 503
 			if r.ErrorType == ErrorBadData {
 				code = 400

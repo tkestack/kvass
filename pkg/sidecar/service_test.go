@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"tkestack.io/kvass/pkg/api"
@@ -66,7 +67,8 @@ func TestService_ServeHTTP(t *testing.T) {
 
 			a := NewService("", tProm.URL, func() (int64, error) {
 				return int64(0), nil
-			}, prom.NewConfigManager(), NewTargetsManager("", logrus.New()), logrus.New())
+			}, prom.NewConfigManager(), NewTargetsManager("", logrus.New()),
+				prometheus.DefaultRegisterer, logrus.New())
 			a.ginEngine.POST(a.path("/test"), func(context *gin.Context) {})
 
 			r, _ := api.TestCall(t, a.ServeHTTP, cs.uri, http.MethodGet, "", nil)

@@ -19,16 +19,26 @@ package sidecar
 
 import (
 	"fmt"
+	"net/http"
+	"net/url"
+
 	"github.com/cssivision/reverseproxy"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
-	"net/http"
-	"net/url"
 	"tkestack.io/kvass/pkg/api"
 	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/shard"
 	"tkestack.io/kvass/pkg/utils/types"
+)
+
+var (
+	httpRequestMetrics = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "kvass_sidecar_http_request_duration_seconds",
+		Help:    "HTTP latency distributions.",
+		Buckets: prometheus.LinearBuckets(0.1, 0.2, 20),
+	})
 )
 
 // Service is the api server of shard
@@ -51,6 +61,7 @@ func NewService(
 	getHeadSeries func() (int64, error),
 	cfgManager *prom.ConfigManager,
 	targetManager *TargetsManager,
+	promReg prometheus.Registerer,
 	lg logrus.FieldLogger) *Service {
 
 	s := &Service{
@@ -65,11 +76,13 @@ func NewService(
 	}
 
 	pprof.Register(s.ginEngine)
-	s.ginEngine.GET(s.path("/api/v1/shard/runtimeinfo/"), api.Wrap(s.lg, s.runtimeInfo))
-	s.ginEngine.GET(s.path("/api/v1/shard/targets/"), api.Wrap(s.lg, func(ctx *gin.Context) *api.Result {
+	promReg.MustRegister(httpRequestMetrics)
+
+	s.ginEngine.GET(s.path("/api/v1/shard/runtimeinfo/"), api.Wrap(s.lg, httpRequestMetrics, s.runtimeInfo))
+	s.ginEngine.GET(s.path("/api/v1/shard/targets/"), api.Wrap(s.lg, httpRequestMetrics, func(ctx *gin.Context) *api.Result {
 		return api.Data(s.targetManager.TargetsInfo().Status)
 	}))
-	s.ginEngine.POST(s.path("/api/v1/shard/targets/"), api.Wrap(s.lg, s.updateTargets))
+	s.ginEngine.POST(s.path("/api/v1/shard/targets/"), api.Wrap(s.lg, httpRequestMetrics, s.updateTargets))
 	s.ginEngine.POST(s.path("/-/reload/"), api.Wrap(lg, func(ctx *gin.Context) *api.Result {
 		if err := s.cfgManager.ReloadFromFile(configFile); err != nil {
 			return api.BadDataErr(err, "reload failed")
