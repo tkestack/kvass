@@ -125,8 +125,7 @@ distribution targets to shards`,
 		format := &promlog.AllowedFormat{}
 		format.Set("logfmt")
 		var (
-			lg = logrus.New()
-
+			lg     = logrus.New()
 			logger = promlog.New(&promlog.Config{
 				Level:  level,
 				Format: format,
@@ -135,7 +134,7 @@ distribution targets to shards`,
 			scrapeManager          = scrape.New(lg.WithField("component", "scrape discovery"))
 			discoveryManagerScrape = prom_discovery.NewManager(context.Background(), log.With(logger, "component", "discovery manager scrape"), prom_discovery.Name("scrape"))
 			targetDiscovery        = discovery.New(lg.WithField("component", "target discovery"))
-			exp                    = explore.New(scrapeManager, lg.WithField("component", "explore"))
+			exp                    = explore.New(scrapeManager, promRegistry, lg.WithField("component", "explore"))
 			cfgManager             = prom.NewConfigManager()
 
 			cd = coordinator.NewCoordinator(
@@ -151,6 +150,7 @@ distribution targets to shards`,
 				cfgManager.ConfigInfo,
 				exp.Get,
 				targetDiscovery.ActiveTargetsByHash,
+				promRegistry,
 				lg.WithField("component", "coordinator"))
 		)
 
@@ -176,6 +176,7 @@ distribution targets to shards`,
 			cd.LastGlobalScrapeStatus,
 			targetDiscovery.ActiveTargets,
 			targetDiscovery.DropTargets,
+			promRegistry,
 			lg.WithField("component", "web"),
 		)
 

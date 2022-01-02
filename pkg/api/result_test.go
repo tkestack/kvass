@@ -26,6 +26,7 @@ import (
 	"tkestack.io/kvass/pkg/utils/test"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
 	"github.com/stretchr/testify/require"
@@ -55,7 +56,7 @@ func TestBadDataErr(t *testing.T) {
 	require.Equal(t, StatusError, s.Status)
 }
 
-func TestWrap(t *testing.T) {
+func TestWrapper(t *testing.T) {
 	var cases = []struct {
 		name   string
 		code   int
@@ -86,10 +87,12 @@ func TestWrap(t *testing.T) {
 	for _, cs := range cases {
 		t.Run(cs.name, func(t *testing.T) {
 			r := require.New(t)
+			wp := NewHelper(logrus.New(), prometheus.NewRegistry(), "test")
 			e := gin.Default()
-			e.GET("/test", Wrap(logrus.New(), func(ctx *gin.Context) *Result {
+			e.GET("/test", wp.Wrap(func(ctx *gin.Context) *Result {
 				return cs.result
 			}))
+			e.GET("/metrics", wp.MetricsHandler)
 
 			req := httptest.NewRequest("GET", "/test", nil)
 			w := httptest.NewRecorder()

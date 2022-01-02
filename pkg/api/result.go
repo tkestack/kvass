@@ -18,8 +18,13 @@
 package api
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 )
 
@@ -78,18 +83,57 @@ const (
 	ErrorInternal ErrorType = "internal"
 )
 
+// Helper provider some function to build a service
+type Helper struct {
+	log                 logrus.FieldLogger
+	httpDurationSeconds *prometheus.HistogramVec
+	register            *prometheus.Registry
+}
+
+// NewHelper create a new APIWrapper
+func NewHelper(lg logrus.FieldLogger, register *prometheus.Registry, metricsPrefix string) *Helper {
+	w := &Helper{
+		log:      lg,
+		register: register,
+		httpDurationSeconds: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    fmt.Sprintf("%s_http_request_duration_seconds", metricsPrefix),
+			Help:    "http request duration seconds",
+			Buckets: []float64{0.01, 0.1, 0.3, 0.5, 1, 3, 5, 10},
+		}, []string{"path", "code"}),
+	}
+
+	w.register.MustRegister(w.httpDurationSeconds)
+	return w
+}
+
+// MetricsHandler process metrics request
+func (h *Helper) MetricsHandler(c *gin.Context) {
+	promhttp.HandlerFor(h.register, promhttp.HandlerOpts{
+		ErrorLog: h.log,
+	}).ServeHTTP(c.Writer, c.Request)
+}
+
 // Wrap return a gin handler function with common result processed
-func Wrap(log logrus.FieldLogger, f func(ctx *gin.Context) *Result) func(ctx *gin.Context) {
+func (h *Helper) Wrap(f func(ctx *gin.Context) *Result) func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
+		var (
+			path = ctx.Request.URL.Path
+			code = 200
+		)
+
+		defer func(start time.Time) {
+			h.httpDurationSeconds.WithLabelValues(path, fmt.Sprint(code)).
+				Observe(float64(time.Since(start).Seconds()))
+		}(time.Now())
+
 		r := f(ctx)
 		if r == nil {
-			ctx.Status(200)
+			ctx.Status(code)
 			return
 		}
 
-		code := 200
 		if r.ErrorType != "" {
-			log.Error(r.Err)
+			h.log.Error(r.Err)
 			code = 503
 			if r.ErrorType == ErrorBadData {
 				code = 400

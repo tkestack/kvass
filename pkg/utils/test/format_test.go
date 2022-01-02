@@ -18,8 +18,9 @@
 package test
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestMustJSON(t *testing.T) {
@@ -30,6 +31,7 @@ func TestMustJSON(t *testing.T) {
 	}
 
 	require.Equal(t, `{"A":"test"}`, MustJSON(&a))
+	require.Equal(t, "", MustJSON(nil))
 }
 
 func TestMustYAMLV2(t *testing.T) {
@@ -48,4 +50,6 @@ func TestCopyJSON(t *testing.T) {
 	dst := ""
 	require.NoError(t, CopyJSON(&dst, &from))
 	require.Equal(t, "test", dst)
+	require.Error(t, CopyJSON(dst, from))
+	require.Error(t, CopyJSON(dst, nil))
 }

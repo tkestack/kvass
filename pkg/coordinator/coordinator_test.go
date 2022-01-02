@@ -19,11 +19,13 @@ package coordinator
 
 import (
 	"fmt"
+	"testing"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/scrape"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 	"tkestack.io/kvass/pkg/discovery"
 	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/shard"
@@ -575,9 +577,16 @@ func TestCoordinator_RunOnce(t *testing.T) {
 				MaxIdleTime: cs.maxIdleTime,
 				Period:      cs.period,
 			}
-			c := NewCoordinator(option, &fakeReplicasManager{cs.shardManager}, func() *prom.ConfigInfo {
-				return prom.DefaultConfig
-			}, cs.getExploreResult, cs.getActive, logrus.New())
+			c := NewCoordinator(option,
+				&fakeReplicasManager{cs.shardManager},
+				func() *prom.ConfigInfo {
+					return prom.DefaultConfig
+				},
+				cs.getExploreResult,
+				cs.getActive,
+				prometheus.NewRegistry(),
+				logrus.New(),
+			)
 			require.NoError(t, c.runOnce())
 			cs.shardManager.assert(t)
 		})
@@ -629,9 +638,13 @@ func TestCoordinator_LastGlobalScrapeStatus(t *testing.T) {
 		MaxIdleTime: time.Second,
 		Period:      0,
 	}
-	c := NewCoordinator(option, &fakeReplicasManager{shardManager}, func() *prom.ConfigInfo {
-		return prom.DefaultConfig
-	}, getStatus, active, logrus.New())
+	c := NewCoordinator(option,
+		&fakeReplicasManager{shardManager}, func() *prom.ConfigInfo {
+			return prom.DefaultConfig
+		}, getStatus, active,
+		prometheus.NewRegistry(),
+		logrus.New(),
+	)
 
 	r := require.New(t)
 	r.NoError(c.runOnce())

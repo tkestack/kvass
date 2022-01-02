@@ -19,19 +19,19 @@ package wait
 
 import (
 	"context"
-	"github.com/sirupsen/logrus"
+	"fmt"
 	"testing"
+	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
 func TestRunUntil(t *testing.T) {
-	called := false
-	ctx, cancel := context.WithCancel(context.Background())
-	_ = RunUntil(ctx, logrus.New(), 0, func() error {
-		called = true
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	err := RunUntil(ctx, logrus.New(), time.Second, func() error {
 		cancel()
-		return nil
+		return fmt.Errorf("xx")
 	})
-	require.True(t, called)
+	require.NoError(t, err)
 }

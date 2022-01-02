@@ -19,15 +19,29 @@ package coordinator
 
 import (
 	"context"
-	"github.com/pkg/errors"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
+
 	"tkestack.io/kvass/pkg/discovery"
 	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/shard"
 	"tkestack.io/kvass/pkg/target"
 	"tkestack.io/kvass/pkg/utils/wait"
+)
 
-	"github.com/sirupsen/logrus"
+var (
+	coordinatorFailed = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "kvass_coordinator_failed_total",
+	}, []string{})
+	assignNoScrapingTargetsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "kvass_coordinator_assign_targets_total",
+	}, []string{})
+	alleviateShardsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "kvass_coordinator_alleviate_shards_total",
+	}, []string{})
 )
 
 // Option indicate all coordinate arguments
@@ -66,7 +80,12 @@ func NewCoordinator(
 	getConfig func() *prom.ConfigInfo,
 	getExploreResult func(hash uint64) *target.ScrapeStatus,
 	getActive func() map[uint64]*discovery.SDTargets,
-	log logrus.FieldLogger) *Coordinator {
+	promRegisterer prometheus.Registerer,
+	log logrus.FieldLogger,
+) *Coordinator {
+	_ = promRegisterer.Register(coordinatorFailed)
+	_ = promRegisterer.Register(assignNoScrapingTargetsTotal)
+	_ = promRegisterer.Register(alleviateShardsTotal)
 	return &Coordinator{
 		reManager:        reManager,
 		getConfig:        getConfig,
@@ -89,10 +108,16 @@ func (c *Coordinator) LastGlobalScrapeStatus() map[uint64]*target.ScrapeStatus {
 
 // runOnce get shards information from shard manager,
 // do shard reBalance and change expect shard number
-func (c *Coordinator) runOnce() error {
+func (c *Coordinator) runOnce() (err error) {
+	defer func() {
+		if err != nil {
+			coordinatorFailed.WithLabelValues().Inc()
+		}
+	}()
+
 	replicas, err := c.reManager.Replicas()
 	if err != nil {
-		return errors.Wrapf(err, "get replicas")
+		return errors.Wrap(err, "get replicas")
 	}
 
 	newLastGlobalScrapeStatus := map[uint64]*target.ScrapeStatus{}

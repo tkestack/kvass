@@ -19,12 +19,14 @@ package sidecar
 
 import (
 	"fmt"
+	"net/http"
+	"net/url"
+
 	"github.com/cssivision/reverseproxy"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
-	"net/http"
-	"net/url"
 	"tkestack.io/kvass/pkg/api"
 	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/shard"
@@ -40,7 +42,7 @@ type Service struct {
 	targetManager *TargetsManager
 	promURL       string
 	getHeadSeries func() (int64, error)
-	paths         []string
+	localPaths    []string
 	runHTTP       func(addr string, handler http.Handler) error
 }
 
@@ -51,6 +53,7 @@ func NewService(
 	getHeadSeries func() (int64, error),
 	cfgManager *prom.ConfigManager,
 	targetManager *TargetsManager,
+	promeRegistry *prometheus.Registry,
 	lg logrus.FieldLogger) *Service {
 
 	s := &Service{
@@ -65,32 +68,35 @@ func NewService(
 	}
 
 	pprof.Register(s.ginEngine)
-	s.ginEngine.GET(s.path("/api/v1/shard/runtimeinfo/"), api.Wrap(s.lg, s.runtimeInfo))
-	s.ginEngine.GET(s.path("/api/v1/shard/targets/"), api.Wrap(s.lg, func(ctx *gin.Context) *api.Result {
+	h := api.NewHelper(s.lg, promeRegistry, "kvass_sidecar")
+
+	s.ginEngine.GET(s.localPath("/metrics"), h.MetricsHandler)
+	s.ginEngine.GET(s.localPath("/api/v1/shard/runtimeinfo/"), h.Wrap(s.runtimeInfo))
+	s.ginEngine.GET(s.localPath("/api/v1/shard/targets/"), h.Wrap(func(ctx *gin.Context) *api.Result {
 		return api.Data(s.targetManager.TargetsInfo().Status)
 	}))
-	s.ginEngine.POST(s.path("/api/v1/shard/targets/"), api.Wrap(s.lg, s.updateTargets))
-	s.ginEngine.POST(s.path("/-/reload/"), api.Wrap(lg, func(ctx *gin.Context) *api.Result {
+	s.ginEngine.POST(s.localPath("/api/v1/shard/targets/"), h.Wrap(s.updateTargets))
+	s.ginEngine.POST(s.localPath("/-/reload/"), h.Wrap(func(ctx *gin.Context) *api.Result {
 		if err := s.cfgManager.ReloadFromFile(configFile); err != nil {
 			return api.BadDataErr(err, "reload failed")
 		}
 		return api.Data(nil)
 	}))
-	s.ginEngine.GET("/api/v1/status/config/", api.Wrap(lg, func(ctx *gin.Context) *api.Result {
+	s.ginEngine.GET("/api/v1/status/config/", h.Wrap(func(ctx *gin.Context) *api.Result {
 		return api.Data(gin.H{"yaml": string(s.cfgManager.ConfigInfo().RawContent)})
 	}))
-	s.ginEngine.POST(s.path("/api/v1/status/config/"), api.Wrap(lg, s.updateConfig))
+	s.ginEngine.POST(s.localPath("/api/v1/status/config/"), h.Wrap(s.updateConfig))
 
 	return s
 }
 
-func (s *Service) path(p string) string {
-	s.paths = append(s.paths, p)
+func (s *Service) localPath(p string) string {
+	s.localPaths = append(s.localPaths, p)
 	return p
 }
 
 func (s *Service) ServeHTTP(wt http.ResponseWriter, r *http.Request) {
-	if types.FindStringVague(r.URL.Path, s.paths...) {
+	if types.FindStringVague(r.URL.Path, s.localPaths...) {
 		s.ginEngine.ServeHTTP(wt, r)
 		return
 	}
@@ -142,7 +148,7 @@ func (s *Service) updateTargets(g *gin.Context) *api.Result {
 
 func (s *Service) updateConfig(g *gin.Context) *api.Result {
 	if s.configFile != "" {
-		s.lg.Warnf("config file is set, raw content config update is not allowed")
+		s.lg.Warn("config file is set, raw content config update is not allowed")
 		return api.BadDataErr(fmt.Errorf("config file is set, raw content config update is not allowed"), "")
 	}
 

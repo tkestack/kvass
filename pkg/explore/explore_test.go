@@ -19,17 +19,19 @@ package explore
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"testing"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/pkg/labels"
 	scrape2 "github.com/prometheus/prometheus/scrape"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"testing"
-	"time"
 	"tkestack.io/kvass/pkg/discovery"
 	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/scrape"
@@ -37,7 +39,7 @@ import (
 )
 
 func TestExplore_UpdateTargets(t *testing.T) {
-	e := New(scrape.New(logrus.New()), logrus.New())
+	e := New(scrape.New(logrus.New()), prometheus.NewRegistry(), logrus.New())
 	require.Nil(t, e.Get(1))
 	e.UpdateTargets(map[string][]*discovery.SDTargets{
 		"job1": {&discovery.SDTargets{
@@ -68,7 +70,7 @@ func TestExplore_Run(t *testing.T) {
 		},
 	}))
 
-	e := New(sm, logrus.New())
+	e := New(sm, prometheus.NewRegistry(), logrus.New())
 	e.retryInterval = time.Millisecond * 10
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -122,7 +124,7 @@ func TestExplore_Run(t *testing.T) {
 
 func TestExplore_ApplyConfig(t *testing.T) {
 	r := require.New(t)
-	e := New(scrape.New(logrus.New()), logrus.New())
+	e := New(scrape.New(logrus.New()), prometheus.NewRegistry(), logrus.New())
 	e.UpdateTargets(map[string][]*discovery.SDTargets{
 		"job1": {&discovery.SDTargets{
 			ShardTarget: &target.Target{

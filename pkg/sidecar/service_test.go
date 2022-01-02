@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"tkestack.io/kvass/pkg/api"
@@ -60,14 +61,15 @@ func TestService_ServeHTTP(t *testing.T) {
 			tProm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 				promCalled = true
 				w.WriteHeader(200)
-				return
 			}))
 			defer tProm.Close()
 
 			a := NewService("", tProm.URL, func() (int64, error) {
 				return int64(0), nil
-			}, prom.NewConfigManager(), NewTargetsManager("", logrus.New()), logrus.New())
-			a.ginEngine.POST(a.path("/test"), func(context *gin.Context) {})
+			}, prom.NewConfigManager(),
+				NewTargetsManager("", prometheus.NewRegistry(), logrus.New()),
+				prometheus.NewRegistry(), logrus.New())
+			a.ginEngine.POST(a.localPath("/test"), func(context *gin.Context) {})
 
 			r, _ := api.TestCall(t, a.ServeHTTP, cs.uri, http.MethodGet, "", nil)
 			r.Equal(cs.wantCall, promCalled)
@@ -76,7 +78,7 @@ func TestService_ServeHTTP(t *testing.T) {
 }
 
 func TestService_Run(t *testing.T) {
-	s := NewService("", "", nil, nil, nil, logrus.New())
+	s := NewService("", "", nil, nil, nil, prometheus.NewRegistry(), logrus.New())
 	r := require.New(t)
 	called := false
 	s.runHTTP = func(addr string, handler http.Handler) error {
@@ -167,7 +169,7 @@ scrape_configs:
 	for _, cs := range cases {
 		t.Run(cs.name, func(t *testing.T) {
 			r := require.New(t)
-			tm := NewTargetsManager(t.TempDir(), logrus.New())
+			tm := NewTargetsManager(t.TempDir(), prometheus.NewRegistry(), logrus.New())
 			r.NoError(tm.UpdateTargets(cs.targets))
 
 			cfg := path.Join(t.TempDir(), "config.yaml")
@@ -175,7 +177,7 @@ scrape_configs:
 			cfgMa := prom.NewConfigManager()
 			r.NoError(cfgMa.ReloadFromFile(cfg))
 
-			s := NewService("", "", cs.getPromRuntimeInfo, cfgMa, tm, logrus.New())
+			s := NewService("", "", cs.getPromRuntimeInfo, cfgMa, tm, prometheus.NewRegistry(), logrus.New())
 			res := s.runtimeInfo(nil)
 			r.Equal(cs.wantAPIResult.Status, res.Status)
 			if res.Status != api.StatusError {
@@ -203,8 +205,8 @@ func TestService_UpdateTargets(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	r := require.New(t)
-	tm := NewTargetsManager(t.TempDir(), logrus.New())
-	s := NewService("", "", nil, nil, tm, logrus.New())
+	tm := NewTargetsManager(t.TempDir(), prometheus.NewRegistry(), logrus.New())
+	s := NewService("", "", nil, nil, tm, prometheus.NewRegistry(), logrus.New())
 	s.ServeHTTP(w, req)
 	result := w.Result()
 	r.Equal(200, result.StatusCode)
@@ -276,7 +278,6 @@ scrape_configs:
 
 	for _, cs := range cases {
 		t.Run(cs.desc, func(t *testing.T) {
-			r := require.New(t)
 			c := successCase()
 			cs.updateCase(c)
 			cm := prom.NewConfigManager()
@@ -286,7 +287,7 @@ scrape_configs:
 				return nil
 			})
 
-			svc := NewService(c.configFile, "", nil, cm, nil, logrus.New())
+			svc := NewService(c.configFile, "", nil, cm, nil, prometheus.NewRegistry(), logrus.New())
 			req := &shard.UpdateConfigRequest{
 				RawContent: c.content,
 			}
