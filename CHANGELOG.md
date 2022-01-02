@@ -1,3 +1,19 @@
+
+## [v0.2.0] - 2022-01-03
+### Feat
+- add components metrics ([#82](https://github.com/tkestack/kvass/issues/82))
+- use stream model to reduce memory usage ([#81](https://github.com/tkestack/kvass/issues/81))
+- support-http-sd ([#74](https://github.com/tkestack/kvass/issues/74))
+- extend /api/v1/targets detail ([#66](https://github.com/tkestack/kvass/issues/66))
+- support static shards ([#64](https://github.com/tkestack/kvass/issues/64))
+
+### Fix
+- may panic when waiting for first service discovery done ([#79](https://github.com/tkestack/kvass/issues/79))
+- statefulsets shards pods should be sort ([#77](https://github.com/tkestack/kvass/issues/77))
+- add some unit test ([#68](https://github.com/tkestack/kvass/issues/68))
+- fetching head series ([#53](https://github.com/tkestack/kvass/issues/53))
+
+
 ## [v0.1.4] - 2021-05-25
 ### Feat
 - coordinator skip upgrading statefulsets
