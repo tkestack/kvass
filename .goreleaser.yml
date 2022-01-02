@@ -11,5 +11,3 @@ dockers:
   - image_templates:
       - "tkestack/kvass:latest"
       - "tkestack/kvass:{{ .Tag }}"
-    binaries:
-      - kvass
