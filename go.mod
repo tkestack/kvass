@@ -14,6 +14,7 @@ require (
 	github.com/mitchellh/hashstructure/v2 v2.0.1
 	github.com/mroth/weightedrand v0.4.1
 	github.com/pkg/errors v0.9.1
+	github.com/prometheus/client_golang v1.11.0
 	github.com/prometheus/common v0.32.1
 	github.com/prometheus/prometheus v2.28.1+incompatible
 	github.com/sirupsen/logrus v1.8.1
@@ -107,7 +108,6 @@ require (
 	github.com/opentracing-contrib/go-stdlib v1.0.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/client_golang v1.11.0 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
 	github.com/scaleway/scaleway-sdk-go v1.0.0-beta.7.0.20210223165440-c65ae3540d44 // indirect

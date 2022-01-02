@@ -26,10 +26,21 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	_ "github.com/prometheus/prometheus/discovery/install"
 	"github.com/spf13/cobra"
 )
+
+var (
+	promRegistry *prometheus.Registry
+)
+
+func init() {
+	promRegistry = prometheus.NewRegistry()
+	promRegistry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	promRegistry.MustRegister(collectors.NewGoCollector())
+}
 
 var rootCmd = &cobra.Command{
 	Use:   "Kvass",

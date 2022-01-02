@@ -80,19 +80,29 @@ var sidecarCmd = &cobra.Command{
 			lg            = log.New()
 			scrapeManager = scrape.New(log.WithField("component", "scrape manager"))
 			configManager = prom.NewConfigManager()
-			targetManager = sidecar.NewTargetsManager(sidecarCfg.storePath, log.WithField("component", "targets manager"))
+			targetManager = sidecar.NewTargetsManager(
+				sidecarCfg.storePath,
+				promRegistry,
+				log.WithField("component", "targets manager"),
+			)
 
 			proxy = sidecar.NewProxy(
 				scrapeManager.GetJob,
 				func() map[uint64]*target.ScrapeStatus {
 					return targetManager.TargetsInfo().Status
 				},
+				promRegistry,
 				log.WithField("component", "target manager"))
 
-			injector = sidecar.NewInjector(sidecarCfg.configOutFile, sidecar.InjectConfigOptions{
-				ProxyURL:      sidecarCfg.injectProxyURL,
-				PrometheusURL: sidecarCfg.prometheusURL,
-			}, lg.WithField("component", "injector"))
+			injector = sidecar.NewInjector(
+				sidecarCfg.configOutFile,
+				sidecar.InjectConfigOptions{
+					ProxyURL:      sidecarCfg.injectProxyURL,
+					PrometheusURL: sidecarCfg.prometheusURL,
+				},
+				promRegistry,
+				lg.WithField("component", "injector"),
+			)
 			promCli = prom.NewClient(sidecarCfg.prometheusURL)
 		)
 
@@ -129,6 +139,7 @@ var sidecarCmd = &cobra.Command{
 			},
 			configManager,
 			targetManager,
+			promRegistry,
 			log.WithField("component", "web"),
 		)
 

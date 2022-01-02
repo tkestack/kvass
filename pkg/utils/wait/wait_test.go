@@ -18,10 +18,20 @@
 package wait
 
 import (
+	"context"
+	"fmt"
 	"testing"
+	"time"
+
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRunUntil(t *testing.T) {
-	type caseInfo struct {
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	err := RunUntil(ctx, logrus.New(), time.Second, func() error {
+		cancel()
+		return fmt.Errorf("xx")
+	})
+	require.NoError(t, err)
 }

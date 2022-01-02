@@ -18,10 +18,11 @@
 package coordinator
 
 import (
+	"time"
+
 	wr "github.com/mroth/weightedrand"
 	"github.com/prometheus/prometheus/scrape"
 	"golang.org/x/sync/errgroup"
-	"time"
 	"tkestack.io/kvass/pkg/discovery"
 	"tkestack.io/kvass/pkg/shard"
 	"tkestack.io/kvass/pkg/target"
@@ -276,6 +277,8 @@ func (c *Coordinator) alleviateShard(s *shardInfo, changeAbleShards []*shardInfo
 	}
 
 	c.log.Infof("%s need alleviate", s.shard.ID)
+	alleviateShardsTotal.WithLabelValues().Inc()
+
 	for hash, tar := range s.scraping {
 		if total <= expSeries {
 			break
@@ -355,6 +358,7 @@ func (c *Coordinator) assignNoScrapingTargets(
 		if sd != nil {
 			sd.runtime.HeadSeries += status.Series
 			sd.scraping[hash] = status
+			assignNoScrapingTargetsTotal.WithLabelValues().Inc()
 		} else {
 			needSpace += status.Series
 		}

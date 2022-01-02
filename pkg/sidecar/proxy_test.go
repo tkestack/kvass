@@ -17,17 +17,19 @@
 package sidecar
 
 import (
-	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/config"
-	scrape2 "github.com/prometheus/prometheus/scrape"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/config"
+	scrape2 "github.com/prometheus/prometheus/scrape"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
 	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/target"
 )
@@ -127,6 +129,7 @@ func TestProxy_ServeHTTP(t *testing.T) {
 				func() map[uint64]*target.ScrapeStatus {
 					return cs.status
 				},
+				prometheus.NewRegistry(),
 				logrus.New())
 
 			req := httptest.NewRequest(http.MethodGet, targetServer.URL+cs.uri, strings.NewReader(""))

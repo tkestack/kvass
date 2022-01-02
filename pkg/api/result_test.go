@@ -56,7 +56,7 @@ func TestBadDataErr(t *testing.T) {
 	require.Equal(t, StatusError, s.Status)
 }
 
-func TestWrap(t *testing.T) {
+func TestWrapper(t *testing.T) {
 	var cases = []struct {
 		name   string
 		code   int
@@ -87,17 +87,12 @@ func TestWrap(t *testing.T) {
 	for _, cs := range cases {
 		t.Run(cs.name, func(t *testing.T) {
 			r := require.New(t)
-
-			hg := prometheus.NewHistogram(prometheus.HistogramOpts{
-				Name:    "test",
-				Help:    "HTTP latency distributions.",
-				Buckets: prometheus.LinearBuckets(0.1, 0.2, 20),
-			})
-
+			wp := NewHelper(logrus.New(), prometheus.NewRegistry(), "test")
 			e := gin.Default()
-			e.GET("/test", Wrap(logrus.New(), hg, func(ctx *gin.Context) *Result {
+			e.GET("/test", wp.Wrap(func(ctx *gin.Context) *Result {
 				return cs.result
 			}))
+			e.GET("/metrics", wp.MetricsHandler)
 
 			req := httptest.NewRequest("GET", "/test", nil)
 			w := httptest.NewRecorder()

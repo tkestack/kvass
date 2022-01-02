@@ -21,11 +21,13 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+
 	"tkestack.io/kvass/pkg/shard"
 	"tkestack.io/kvass/pkg/utils/types"
 
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/scrape"
 	v1 "github.com/prometheus/prometheus/web/api/v1"
 	"github.com/sirupsen/logrus"
@@ -55,7 +57,9 @@ func NewService(
 	getScrapeStatus func() map[uint64]*target.ScrapeStatus,
 	getActiveTargets func() map[string][]*discovery.SDTargets,
 	getDropTargets func() map[string][]*discovery.SDTargets,
+	promRegistry *prometheus.Registry,
 	lg logrus.FieldLogger) *Service {
+
 	w := &Service{
 		configFile:       configFile,
 		Engine:           gin.Default(),
@@ -65,18 +69,22 @@ func NewService(
 		getActiveTargets: getActiveTargets,
 		getDropTargets:   getDropTargets,
 	}
+
 	pprof.Register(w.Engine)
 
-	w.GET("/api/v1/targets", api.Wrap(lg, w.targets))
-	w.GET("/api/v1/shard/runtimeinfo", api.Wrap(lg, w.runtimeInfo))
+	h := api.NewHelper(lg, promRegistry, "kvass_coordinator")
+	w.GET("/metrics", h.MetricsHandler)
+	w.GET("/api/v1/targets", h.Wrap(w.targets))
+	w.GET("/api/v1/shard/runtimeinfo", h.Wrap(w.runtimeInfo))
 
-	w.POST("/-/reload", api.Wrap(lg, func(ctx *gin.Context) *api.Result {
+	w.POST("/-/reload", h.Wrap(func(ctx *gin.Context) *api.Result {
 		if err := w.cfgManager.ReloadFromFile(configFile); err != nil {
 			return api.BadDataErr(err, "reload failed")
 		}
 		return api.Data(nil)
 	}))
-	w.GET("/api/v1/status/config", api.Wrap(lg, func(ctx *gin.Context) *api.Result {
+
+	w.GET("/api/v1/status/config", h.Wrap(func(ctx *gin.Context) *api.Result {
 		return api.Data(gin.H{"yaml": string(cfgManager.ConfigInfo().RawContent)})
 	}))
 	return w

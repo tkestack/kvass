@@ -26,10 +26,11 @@ type Scraper struct {
 	url    string
 	writer []io.Writer
 	log    logrus.FieldLogger
-	// HTTPResponse save the http reponse when RequestTo is called
+	// HTTPResponse save the http response when RequestTo is called
 	HTTPResponse *http.Response
 	gZipReader   *gzip.Reader
 	reader       io.ReadCloser
+	ctxCancel    func()
 }
 
 // NewScraper create a new Scraper
@@ -65,7 +66,7 @@ func (s *Scraper) RequestTo() error {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.job.Config.ScrapeTimeout))
-	defer cancel()
+	s.ctxCancel = cancel
 
 	s.HTTPResponse, err = s.job.Cli.Do(req.WithContext(ctx))
 	if err != nil {
@@ -93,6 +94,7 @@ func (s *Scraper) RequestTo() error {
 // RequestTo must be called before ParseResponse
 func (s *Scraper) ParseResponse(do func(rows []parser.Row) error) error {
 	defer func() {
+		s.ctxCancel()
 		if s.gZipReader != nil {
 			common.PutGzipReader(s.gZipReader)
 		}

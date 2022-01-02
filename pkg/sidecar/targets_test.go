@@ -18,12 +18,14 @@ package sidecar
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"path"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
 	"tkestack.io/kvass/pkg/shard"
 	"tkestack.io/kvass/pkg/target"
 	"tkestack.io/kvass/pkg/utils/test"
@@ -103,7 +105,7 @@ func TestTargetsManager_Load(t *testing.T) {
 		t.Run(cs.name, func(t *testing.T) {
 			r := require.New(t)
 			dir := t.TempDir()
-			tm := NewTargetsManager(dir, logrus.New())
+			tm := NewTargetsManager(dir, prometheus.NewRegistry(), logrus.New())
 			if cs.fileName != "" {
 				r.NoError(ioutil.WriteFile(path.Join(dir, cs.fileName), []byte(cs.storeContent), 0755))
 			}
@@ -187,7 +189,7 @@ func TestTargetsManager_UpdateTargets(t *testing.T) {
 			r := require.New(t)
 			dir := t.TempDir()
 
-			tm := NewTargetsManager(dir, logrus.New())
+			tm := NewTargetsManager(dir, prometheus.NewRegistry(), logrus.New())
 			tm.targets = cs.oldTargetsInfo
 			r.NoError(tm.UpdateTargets(cs.req))
 			r.JSONEq(test.MustJSON(cs.wantTargetsInfo.Targets), test.MustJSON(tm.targets.Targets))
@@ -222,7 +224,7 @@ func TestTargetsManager_AddUpdateCallbacks(t *testing.T) {
 	for _, cs := range cases {
 		t.Run(cs.name, func(t *testing.T) {
 			r := require.New(t)
-			tm := NewTargetsManager(t.TempDir(), logrus.New())
+			tm := NewTargetsManager(t.TempDir(), prometheus.NewRegistry(), logrus.New())
 
 			req := &shard.UpdateTargetsRequest{
 				Targets: map[string][]*target.Target{

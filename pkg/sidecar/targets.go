@@ -19,12 +19,15 @@ package sidecar
 
 import (
 	"encoding/json"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 	"tkestack.io/kvass/pkg/shard"
 	"tkestack.io/kvass/pkg/target"
 	"tkestack.io/kvass/pkg/utils/types"
@@ -34,6 +37,14 @@ var (
 	storeFileName           = "kvass-shard.json"
 	oldVersionStoreFileName = "targets.json"
 	timeNow                 = time.Now
+
+	targetsUpdatedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "kvass_sidecar_targets_updated_total",
+	}, []string{"success"})
+
+	targetsTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "kvass_sidecar_targets_total",
+	}, []string{})
 )
 
 // TargetsInfo contains all current targets
@@ -63,7 +74,9 @@ type TargetsManager struct {
 }
 
 // NewTargetsManager return a new target manager
-func NewTargetsManager(storeDir string, log logrus.FieldLogger) *TargetsManager {
+func NewTargetsManager(storeDir string, promRegistry prometheus.Registerer, log logrus.FieldLogger) *TargetsManager {
+	_ = promRegistry.Register(targetsTotal)
+	_ = promRegistry.Register(targetsUpdatedTotal)
 	return &TargetsManager{
 		storeDir: storeDir,
 		log:      log,
@@ -110,7 +123,12 @@ func (t *TargetsManager) AddUpdateCallbacks(f ...func(targets map[string][]*targ
 }
 
 // UpdateTargets update local targets
-func (t *TargetsManager) UpdateTargets(req *shard.UpdateTargetsRequest) error {
+func (t *TargetsManager) UpdateTargets(req *shard.UpdateTargetsRequest) (err error) {
+	defer func() {
+		targetsUpdatedTotal.WithLabelValues(fmt.Sprint(err == nil)).Inc()
+		targetsTotal.WithLabelValues().Set(float64(len(t.targets.Status)))
+	}()
+
 	t.targets.Targets = req.Targets
 	t.updateStatus()
 	t.updateIdleState()

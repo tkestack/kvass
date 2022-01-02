@@ -21,6 +21,7 @@ import (
 	"path"
 
 	"github.com/go-kit/log"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 	"tkestack.io/kvass/pkg/prom"
 
@@ -73,7 +74,8 @@ remote_read:
 		InjectConfigOptions{
 			ProxyURL:      "http://127.0.0.1:8008",
 			PrometheusURL: "http://127.0.0.1:9090",
-		}, logrus.New())
+		}, prometheus.NewRegistry(),
+		logrus.New())
 
 	r.NoError(in.ApplyConfig(&prom.ConfigInfo{
 		RawContent: []byte(cfg),

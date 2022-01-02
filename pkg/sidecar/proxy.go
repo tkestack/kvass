@@ -22,31 +22,37 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"sync"
 	"time"
 
-	"github.com/VictoriaMetrics/VictoriaMetrics/lib/protoparser/prometheus"
+	parser "github.com/VictoriaMetrics/VictoriaMetrics/lib/protoparser/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/target"
+)
 
-	"github.com/sirupsen/logrus"
+var (
+	proxyTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "kvass_sidecar_proxy_total",
+	}, []string{})
 )
 
 // Proxy is a Proxy server for prometheus tManager
 // Proxy will return an empty metrics if this target if not allowed to scrape for this prometheus client
 // otherwise, Proxy do real tManager, statistic metrics samples and return metrics to prometheus
 type Proxy struct {
-	targetsLock sync.Mutex
-	getJob      func(jobName string) *scrape.JobInfo
-	getStatus   func() map[uint64]*target.ScrapeStatus
-	log         logrus.FieldLogger
+	getJob    func(jobName string) *scrape.JobInfo
+	getStatus func() map[uint64]*target.ScrapeStatus
+	log       logrus.FieldLogger
 }
 
 // NewProxy create a new proxy server
 func NewProxy(
 	getJob func(jobName string) *scrape.JobInfo,
 	getStatus func() map[uint64]*target.ScrapeStatus,
+	promRegistry prometheus.Registerer,
 	log logrus.FieldLogger) *Proxy {
+	_ = promRegistry.Register(proxyTotal)
 	return &Proxy{
 		getJob:    getJob,
 		getStatus: getStatus,
@@ -61,6 +67,8 @@ func (p *Proxy) Run(address string) error {
 
 // ServeHTTP handle one Proxy request
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	proxyTotal.WithLabelValues().Inc()
+
 	job, hashStr, realURL := translateURL(*r.URL)
 	jobInfo := p.getJob(job)
 	if jobInfo == nil {
@@ -101,7 +109,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", scraper.HTTPResponse.Header.Get("Content-Type"))
 
 	series := int64(0)
-	if err := scraper.ParseResponse(func(rows []prometheus.Row) error {
+	if err := scraper.ParseResponse(func(rows []parser.Row) error {
 		series += scrape.StatisticSeries(rows, jobInfo.Config.MetricRelabelConfigs)
 		return nil
 	}); err != nil {
