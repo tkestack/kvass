@@ -35,6 +35,12 @@ var (
 	proxyTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "kvass_sidecar_proxy_total",
 	}, []string{})
+	proxySeries = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "kvass_sidecar_proxy_target_series",
+	}, []string{"target_job", "url"})
+	proxyScrapeDurtion = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "kvass_sidecar_proxy_target_scrape_durtion",
+	}, []string{"target_job", "url"})
 )
 
 // Proxy is a Proxy server for prometheus tManager
@@ -53,6 +59,8 @@ func NewProxy(
 	promRegistry prometheus.Registerer,
 	log logrus.FieldLogger) *Proxy {
 	_ = promRegistry.Register(proxyTotal)
+	_ = promRegistry.Register(proxySeries)
+	_ = promRegistry.Register(proxyScrapeDurtion)
 	return &Proxy{
 		getJob:    getJob,
 		getStatus: getStatus,
@@ -119,7 +127,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-
+	proxySeries.WithLabelValues(jobInfo.Config.JobName, realURL.String()).Set(float64(series))
+	proxyScrapeDurtion.WithLabelValues(jobInfo.Config.JobName, realURL.String()).Set(float64(time.Now().Sub(start)))
 	if tar != nil {
 		tar.UpdateSeries(series)
 	}
