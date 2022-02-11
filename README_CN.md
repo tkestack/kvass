@@ -38,7 +38,7 @@ Kvass 是一个 [Prometheus](https://github.com/prometheus/prometheus) 横向扩
 * 支持数千万series规模 (数千k8s节点)
 * 无需修改Prometheus配置文件，无需加入hash_mod
 * target动态调度
-* 根据target实际数据规模来进行分片复杂均衡，而不是用hash_mod
+* 根据target实际数据规模来进行分片负载均衡，而不是用hash_mod
 * 支持多副本
 
 # 设计
