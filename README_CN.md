@@ -55,9 +55,9 @@ Kvass由2个组件组成：coordinator和sidecar.
 
 Coordinator的核心作用包括服务发现，target调度，分片管理等启动参数参考 [code](https://github.com/tkestack/kvass/blob/master/cmd/kvass/coordinator.go#L61)，其核心工作流程包含以下几点
 
-* Coordinaotr 加载配置文件并进行服务发现，获取所有target
+* Coordinator 加载配置文件并进行服务发现，获取所有target
 * 对于每个需要采集的target, Coordinator 为其应用配置文件中的"relabel_configs"，并且探测target当前包含的series数
-* Coordinaotr 周期性分配新Target，转移Target，以及进行分片的扩缩容。
+* Coordinator 周期性分配新Target，转移Target，以及进行分片的扩缩容。
 
 <img src="./README.assets/image-20201126031409284.png" alt="image-20201126031409284" style="zoom:50%;" />
 
