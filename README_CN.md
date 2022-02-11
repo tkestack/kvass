@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-Kvass 是一个 [Prometheus](https://github.com/prometheus/prometheus) 横向扩缩容解决方案，他使用Sidecar动态得根据Coordinator分配下来的target列表来为每个Prometheus生成只含特定target的配置文件，从而将采集任务动态调度到各个Prometheus分片。
+Kvass 是一个 [Prometheus](https://github.com/prometheus/prometheus) 横向扩缩容解决方案，他使用Sidecar动态的根据Coordinator分配下来的target列表来为每个Prometheus生成只含特定target的配置文件，从而将采集任务动态调度到各个Prometheus分片。
 Coordinator 用于服务发现，target调度和分片扩缩容管理.
 [Thanos](https://github.com/thanos-io/thanos) (或者其他TSDB) 用来将分片数据汇总成全局数据.
 
