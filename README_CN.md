@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-Kvass 是一个 [Prometheus](https://github.com/prometheus/prometheus) 横向扩缩容解决方案，他使用Sidecar动态得根据Coordinator分配下来的target列表来为每个Prometheus生成只含特定target的配置文件，从而将采集任务动态调度到各个Prometheus分片。
+Kvass 是一个 [Prometheus](https://github.com/prometheus/prometheus) 横向扩缩容解决方案，他使用Sidecar动态的根据Coordinator分配下来的target列表来为每个Prometheus生成只含特定target的配置文件，从而将采集任务动态调度到各个Prometheus分片。
 Coordinator 用于服务发现，target调度和分片扩缩容管理.
 [Thanos](https://github.com/thanos-io/thanos) (或者其他TSDB) 用来将分片数据汇总成全局数据.
 
@@ -38,7 +38,7 @@ Kvass 是一个 [Prometheus](https://github.com/prometheus/prometheus) 横向扩
 * 支持数千万series规模 (数千k8s节点)
 * 无需修改Prometheus配置文件，无需加入hash_mod
 * target动态调度
-* 根据target实际数据规模来进行分片复杂均衡，而不是用hash_mod
+* 根据target实际数据规模来进行分片负载均衡，而不是用hash_mod
 * 支持多副本
 
 # 设计
@@ -55,9 +55,9 @@ Kvass由2个组件组成：coordinator和sidecar.
 
 Coordinator的核心作用包括服务发现，target调度，分片管理等启动参数参考 [code](https://github.com/tkestack/kvass/blob/master/cmd/kvass/coordinator.go#L61)，其核心工作流程包含以下几点
 
-* Coordinaotr 加载配置文件并进行服务发现，获取所有target
+* Coordinator 加载配置文件并进行服务发现，获取所有target
 * 对于每个需要采集的target, Coordinator 为其应用配置文件中的"relabel_configs"，并且探测target当前包含的series数
-* Coordinaotr 周期性分配新Target，转移Target，以及进行分片的扩缩容。
+* Coordinator 周期性分配新Target，转移Target，以及进行分片的扩缩容。
 
 <img src="./README.assets/image-20201126031409284.png" alt="image-20201126031409284" style="zoom:50%;" />
 
