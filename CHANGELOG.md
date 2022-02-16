@@ -1,7 +1,10 @@
 
+## [v0.2.1] - 2022-02-15
+### Feat 
+- add some metrics in proxy component to statistic series and scrape durtion  ([#86](https://github.com/tkestack/kvass/issues/86))
 ## [v0.2.0] - 2022-01-03
 ### Feat
-- add components metrics ([#82](https://github.com/tkestack/kvass/issues/82))
+- add metrics ([#82](https://github.com/tkestack/kvass/issues/82))
 - use stream model to reduce memory usage ([#81](https://github.com/tkestack/kvass/issues/81))
 - support-http-sd ([#74](https://github.com/tkestack/kvass/issues/74))
 - extend /api/v1/targets detail ([#66](https://github.com/tkestack/kvass/issues/66))
@@ -10,7 +13,8 @@
 ### Fix
 - may panic when waiting for first service discovery done ([#79](https://github.com/tkestack/kvass/issues/79))
 - statefulsets shards pods should be sort ([#77](https://github.com/tkestack/kvass/issues/77))
-- add some unit test ([#68](https://github.com/tkestack/kvass/issues/68))
+- statefulsets shards pods should be sort ([#76](https://github.com/tkestack/kvass/issues/76))
+- some unit test ([#68](https://github.com/tkestack/kvass/issues/68))
 - fetching head series ([#53](https://github.com/tkestack/kvass/issues/53))
 
 
