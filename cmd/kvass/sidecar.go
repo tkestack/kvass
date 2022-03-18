@@ -33,15 +33,16 @@ import (
 )
 
 var sidecarCfg = struct {
-	configFile      string
-	configOutFile   string
-	proxyAddress    string
-	apiAddress      string
-	prometheusURL   string
-	storePath       string
-	injectProxyURL  string
-	fetchHeadSeries bool
-	configInject    configInjectOption
+	configFile             string
+	configOutFile          string
+	proxyAddress           string
+	apiAddress             string
+	prometheusURL          string
+	storePath              string
+	injectProxyURL         string
+	fetchHeadSeries        bool
+	configInject           configInjectOption
+	scrapeKeepAliveDisable bool
 }{}
 
 func init() {
@@ -65,6 +66,8 @@ func init() {
 		"if true, prometheus head series will be used as runtimeinfo.HeadSeries."+
 			"otherwise, the sum of all scraping targets series will be used."+
 			"must set false if use vmagent (or other scraping agent) instead of prometheus.")
+	sidecarCmd.Flags().BoolVar(&sidecarCfg.scrapeKeepAliveDisable, "scrape.disable-keep-alive", false,
+		"disable http keep alive")
 	rootCmd.AddCommand(sidecarCmd)
 }
 
@@ -78,7 +81,7 @@ var sidecarCmd = &cobra.Command{
 		}
 		var (
 			lg            = log.New()
-			scrapeManager = scrape.New(log.WithField("component", "scrape manager"))
+			scrapeManager = scrape.New(sidecarCfg.scrapeKeepAliveDisable, log.WithField("component", "scrape manager"))
 			configManager = prom.NewConfigManager()
 			targetManager = sidecar.NewTargetsManager(
 				sidecarCfg.storePath,

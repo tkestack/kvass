@@ -46,7 +46,7 @@ type JobInfo struct {
 	proxyURL *url.URL
 }
 
-func newJobInfo(cfg config.ScrapeConfig) (*JobInfo, error) {
+func newJobInfo(cfg config.ScrapeConfig, keeAliveDisable bool) (*JobInfo, error) {
 	proxy := os.Getenv("SCRAPE_PROXY")
 	oldProxy := cfg.HTTPClientConfig.ProxyURL
 	if proxy != "" {
@@ -57,7 +57,12 @@ func newJobInfo(cfg config.ScrapeConfig) (*JobInfo, error) {
 		cfg.HTTPClientConfig.ProxyURL.URL = newURL
 	}
 
-	client, err := config_util.NewClientFromConfig(cfg.HTTPClientConfig, cfg.JobName)
+	option := make([]config_util.HTTPClientOption, 0)
+	if keeAliveDisable {
+		option = append(option, config_util.WithKeepAlivesDisabled())
+	}
+
+	client, err := config_util.NewClientFromConfig(cfg.HTTPClientConfig, cfg.JobName, option...)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating HTTP Cli")
 	}

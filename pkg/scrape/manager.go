@@ -7,15 +7,17 @@ import (
 
 // Manager includes all jobs
 type Manager struct {
-	jobs map[string]*JobInfo
-	lg   logrus.FieldLogger
+	jobs            map[string]*JobInfo
+	keeAliveDisable bool
+	lg              logrus.FieldLogger
 }
 
 // New create a Manager with specified Cli set
-func New(lg logrus.FieldLogger) *Manager {
+func New(keeAliveDisable bool, lg logrus.FieldLogger) *Manager {
 	return &Manager{
-		lg:   lg,
-		jobs: map[string]*JobInfo{},
+		lg:              lg,
+		keeAliveDisable: keeAliveDisable,
+		jobs:            map[string]*JobInfo{},
 	}
 }
 
@@ -23,7 +25,7 @@ func New(lg logrus.FieldLogger) *Manager {
 func (s *Manager) ApplyConfig(cfg *prom.ConfigInfo) error {
 	ret := map[string]*JobInfo{}
 	for _, cfg := range cfg.Config.ScrapeConfigs {
-		info, err := newJobInfo(*cfg)
+		info, err := newJobInfo(*cfg, s.keeAliveDisable)
 		if err != nil {
 			s.lg.Error(err.Error())
 			continue
