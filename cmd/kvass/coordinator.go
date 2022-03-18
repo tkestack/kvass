@@ -48,23 +48,24 @@ import (
 )
 
 var cdCfg = struct {
-	shardType             string
-	shardStaticFile       string
-	shardNamespace        string
-	shardSelector         string
-	shardPort             int
-	shardMaxSeries        int64
-	shardMinShard         int32
-	shardMaxShard         int32
-	shardMaxIdleTime      time.Duration
-	shardDisableAlleviate bool
-	shardDeletePVC        bool
-	exploreMaxCon         int
-	webAddress            string
-	configFile            string
-	syncInterval          time.Duration
-	sdInitTimeout         time.Duration
-	configInject          configInjectOption
+	shardType              string
+	shardStaticFile        string
+	shardNamespace         string
+	shardSelector          string
+	shardPort              int
+	shardMaxSeries         int64
+	shardMinShard          int32
+	shardMaxShard          int32
+	shardMaxIdleTime       time.Duration
+	shardDisableAlleviate  bool
+	shardDeletePVC         bool
+	exploreMaxCon          int
+	scrapeKeepAliveDisable bool
+	webAddress             string
+	configFile             string
+	syncInterval           time.Duration
+	sdInitTimeout          time.Duration
+	configInject           configInjectOption
 }{}
 
 func init() {
@@ -93,6 +94,8 @@ func init() {
 		"kvass will delete pvc when shard is removed")
 	coordinatorCmd.Flags().IntVar(&cdCfg.exploreMaxCon, "explore.concurrence", 200,
 		"max explore concurrence")
+	coordinatorCmd.Flags().BoolVar(&cdCfg.scrapeKeepAliveDisable, "scrape.disable-keep-alive", false,
+		"disable http keep alive")
 	coordinatorCmd.Flags().StringVar(&cdCfg.webAddress, "web.address", ":9090",
 		"server bind address")
 	coordinatorCmd.Flags().StringVar(&cdCfg.configFile, "config.file", "prometheus.yml",
@@ -131,7 +134,7 @@ distribution targets to shards`,
 				Format: format,
 			})
 
-			scrapeManager          = scrape.New(lg.WithField("component", "scrape discovery"))
+			scrapeManager          = scrape.New(cdCfg.scrapeKeepAliveDisable, lg.WithField("component", "scrape discovery"))
 			discoveryManagerScrape = prom_discovery.NewManager(context.Background(), log.With(logger, "component", "discovery manager scrape"), prom_discovery.Name("scrape"))
 			targetDiscovery        = discovery.New(lg.WithField("component", "target discovery"))
 			exp                    = explore.New(scrapeManager, promRegistry, lg.WithField("component", "explore"))

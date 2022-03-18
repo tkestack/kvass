@@ -73,7 +73,7 @@ func TestScraper_ParseResponse(t *testing.T) {
 		job, err := newJobInfo(config.ScrapeConfig{
 			JobName:       "test",
 			ScrapeTimeout: model.Duration(time.Second),
-		})
+		}, false)
 		if err != nil {
 			require.Fail(t, err.Error())
 		}
