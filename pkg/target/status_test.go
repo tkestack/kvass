@@ -19,10 +19,11 @@ package target
 
 import (
 	"fmt"
-	"github.com/prometheus/prometheus/scrape"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/prometheus/prometheus/scrape"
+	"github.com/stretchr/testify/require"
 )
 
 func TestScrapeStatus_SetScrapeErr(t *testing.T) {

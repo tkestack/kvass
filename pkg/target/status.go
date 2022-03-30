@@ -18,8 +18,9 @@
 package target
 
 import (
-	"github.com/prometheus/prometheus/scrape"
 	"time"
+
+	"github.com/prometheus/prometheus/scrape"
 )
 
 // ScrapeStatus contains last scraping status of the target
@@ -39,8 +40,10 @@ type ScrapeStatus struct {
 	// ScrapeTimes is the times target scraped by this shard
 	ScrapeTimes uint64 `json:"ScrapeTimes"`
 	// Shards contains ID of shards that is scraping this target
-	Shards     []string `json:"shards"`
-	lastSeries []int64
+	Shards []string `json:"shards"`
+	// LastMetricsSamples is metrics sample statistics of last scrape
+	LastMetricsSamples map[string]uint64 `json:"lastMetricsSamples"`
+	lastSeries         []int64
 }
 
 // SetScrapeErr mark the result of this scraping
@@ -48,7 +51,7 @@ type ScrapeStatus struct {
 // health will be up if err is nil
 func (t *ScrapeStatus) SetScrapeErr(start time.Time, err error) {
 	t.LastScrape = start
-	t.LastScrapeDuration = time.Now().Sub(start).Seconds()
+	t.LastScrapeDuration = time.Since(start).Seconds()
 	if err == nil {
 		t.LastError = ""
 		t.Health = scrape.HealthGood
@@ -61,8 +64,9 @@ func (t *ScrapeStatus) SetScrapeErr(start time.Time, err error) {
 // NewScrapeStatus create a new ScrapeStatus with referential series
 func NewScrapeStatus(series int64) *ScrapeStatus {
 	return &ScrapeStatus{
-		Series: series,
-		Health: scrape.HealthUnknown,
+		Series:             series,
+		Health:             scrape.HealthUnknown,
+		LastMetricsSamples: map[string]uint64{},
 	}
 }
 

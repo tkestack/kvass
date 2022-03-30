@@ -76,6 +76,7 @@ func NewService(
 	w.GET("/metrics", h.MetricsHandler)
 	w.GET("/api/v1/targets", h.Wrap(w.targets))
 	w.GET("/api/v1/shard/runtimeinfo", h.Wrap(w.runtimeInfo))
+	w.GET("/api/v1/metricsinfo", h.Wrap(w.metricsInfo))
 
 	w.POST("/-/reload", h.Wrap(func(ctx *gin.Context) *api.Result {
 		if err := w.cfgManager.ReloadFromFile(configFile); err != nil {
@@ -88,6 +89,19 @@ func NewService(
 		return api.Data(gin.H{"yaml": string(cfgManager.ConfigInfo().RawContent)})
 	}))
 	return w
+}
+
+func (s *Service) metricsInfo(ctx *gin.Context) *api.Result {
+	ret := &MetricsInfo{
+		LastSamples: map[string]uint64{},
+	}
+	for _, ss := range s.getScrapeStatus() {
+		for k, v := range ss.LastMetricsSamples {
+			ret.LastSamples[k] += v
+		}
+	}
+	ret.MetricsTotal = uint64(len(ret.LastSamples))
+	return api.Data(ret)
 }
 
 // runtimeInfo return statistics runtimeInfo of all shards

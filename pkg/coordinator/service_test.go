@@ -248,3 +248,32 @@ func TestAPI_RuntimeInfo(t *testing.T) {
 	r, _ := api.TestCall(t, a.Engine.ServeHTTP, "/api/v1/shard/runtimeinfo", http.MethodGet, "", res)
 	r.Equal(int64(200), res.HeadSeries)
 }
+
+func TestAPI_MetricsInfo(t *testing.T) {
+	a := NewService("", prom.NewConfigManager(), func() map[uint64]*target.ScrapeStatus {
+		return map[uint64]*target.ScrapeStatus{
+			1: {
+				LastMetricsSamples: map[string]uint64{
+					"a": 1,
+					"b": 2,
+				},
+			},
+			2: {
+				LastMetricsSamples: map[string]uint64{
+					"b": 1,
+					"c": 3,
+				},
+			},
+		}
+	}, nil, nil, prometheus.NewRegistry(), logrus.New())
+	res := &MetricsInfo{}
+	r, _ := api.TestCall(t, a.Engine.ServeHTTP, "/api/v1/metricsinfo", http.MethodGet, "", res)
+	r.Equal(&MetricsInfo{
+		MetricsTotal: 3,
+		LastSamples: map[string]uint64{
+			"a": 1,
+			"b": 3,
+			"c": 3,
+		},
+	}, res)
+}
