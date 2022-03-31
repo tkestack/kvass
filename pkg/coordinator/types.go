@@ -24,5 +24,5 @@ type MetricsInfo struct {
 	//
 	SamplesTotal uint64 `json:"samplesTotal"`
 	// LastSamples show the last samples of all metrics
-	LastSamples map[string]uint64
+	LastSamples map[string]uint64 `json:"lastSamples"`
 }
