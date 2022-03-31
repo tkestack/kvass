@@ -98,6 +98,7 @@ func (s *Service) metricsInfo(ctx *gin.Context) *api.Result {
 	for _, ss := range s.getScrapeStatus() {
 		for k, v := range ss.LastMetricsSamples {
 			ret.LastSamples[k] += v
+			ret.SamplesTotal += v
 		}
 	}
 	ret.MetricsTotal = uint64(len(ret.LastSamples))

@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	parser "github.com/VictoriaMetrics/VictoriaMetrics/lib/protoparser/prometheus"
@@ -119,8 +120,12 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	series := int64(0)
 	lastMetricsStat := map[string]uint64{}
+	lk := sync.Mutex{}
 	if err := scraper.ParseResponse(func(rows []parser.Row) error {
 		series += scrape.StatisticSeries(rows, jobInfo.Config.MetricRelabelConfigs)
+		lk.Lock()
+		defer lk.Unlock()
+
 		for _, r := range rows {
 			s := types.DeepCopyString(r.Metric)
 			lastMetricsStat[s]++

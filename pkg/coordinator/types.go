@@ -21,6 +21,8 @@ package coordinator
 type MetricsInfo struct {
 	// MetricsTotal show total metrics in last scrape
 	MetricsTotal uint64 `json:"metricsTotal"`
+	//
+	SamplesTotal uint64 `json:"samplesTotal"`
 	// LastSamples show the last samples of all metrics
 	LastSamples map[string]uint64
 }
