@@ -270,6 +270,7 @@ func TestAPI_MetricsInfo(t *testing.T) {
 	r, _ := api.TestCall(t, a.Engine.ServeHTTP, "/api/v1/metricsinfo", http.MethodGet, "", res)
 	r.Equal(&MetricsInfo{
 		MetricsTotal: 3,
+		SamplesTotal: 7,
 		LastSamples: map[string]uint64{
 			"a": 1,
 			"b": 3,
