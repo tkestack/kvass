@@ -63,10 +63,19 @@ var cdCfg = struct {
 	syncInterval      time.Duration
 	sdInitTimeout     time.Duration
 	configInject      configInjectOption
-	logLevel 		  string
+	logLevel          string
 	rebalanceEnable   bool
 	rebalanceInterval time.Duration
 }{}
+
+type LocalFormatter struct {
+	logrus.Formatter
+}
+
+func (u LocalFormatter) Format(e *logrus.Entry) ([]byte, error) {
+	e.Time = e.Time.In(time.FixedZone("UTC+8", 8*60*60))
+	return u.Formatter.Format(e)
+}
 
 func init() {
 	coordinatorCmd.Flags().StringVar(&cdCfg.shardType, "shard.type", "k8s",
@@ -189,6 +198,7 @@ distribution targets to shards`,
 			lg.WithField("component", "web"),
 		)
 
+		lg.SetFormatter(LocalFormatter{&logrus.TextFormatter{}})
 		lg.Level = logLevel
 
 		if err := cfgManager.ReloadFromFile(cdCfg.configFile); err != nil {
