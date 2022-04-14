@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/klauspost/compress/gzip"
+	"tkestack.io/kvass/pkg/utils/types"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/protoparser/common"
 	"github.com/pkg/errors"
@@ -107,26 +109,60 @@ func (s *Scraper) ParseResponse(do func(rows []parser.Row) error) error {
 		})
 }
 
+// StatisticsSeriesResult is the samples count in one scrape
+type StatisticsSeriesResult struct {
+	lk sync.Mutex
+	// ScrappedTotal is samples number total after relabel
+	ScrappedTotal float64
+	// MetricsTotal is samples number info about all metrics
+	MetricsTotal map[string]*MetricSamplesInfo
+}
+
+// NewStatisticsSeriesResult return an empty StatisticsSeriesResult
+func NewStatisticsSeriesResult() *StatisticsSeriesResult {
+	return &StatisticsSeriesResult{
+		MetricsTotal: map[string]*MetricSamplesInfo{},
+	}
+}
+
+// MetricSamplesInfo statistics sample about one metric
+type MetricSamplesInfo struct {
+	// Total is total samples appeared in this scape
+	Total float64
+	// Scrapped is samples number after relabel
+	Scrapped float64
+}
+
 // StatisticSeries statistic load from metrics raw data
-func StatisticSeries(rows []parser.Row, rc []*relabel.Config) int64 {
-	total := int64(0)
+func StatisticSeries(rows []parser.Row, rc []*relabel.Config, result *StatisticsSeriesResult) {
+	result.lk.Lock()
+	defer result.lk.Unlock()
+
 	for _, row := range rows {
 		var lset labels.Labels
 		lset = append(lset, labels.Label{
 			Name:  "__name__",
 			Value: row.Metric,
 		})
+
+		n := types.DeepCopyString(row.Metric)
+		if result.MetricsTotal[n] == nil {
+			result.MetricsTotal[n] = &MetricSamplesInfo{}
+		}
+
+		result.MetricsTotal[n].Total++
 		for _, tag := range row.Tags {
 			lset = append(lset, labels.Label{
 				Name:  tag.Key,
 				Value: tag.Value,
 			})
 		}
+
 		if newSets := relabel.Process(lset, rc...); newSets != nil {
-			total++
+			result.ScrappedTotal++
+			result.MetricsTotal[n].Scrapped++
 		}
 	}
-	return total
 }
 
 func init() {

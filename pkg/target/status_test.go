@@ -24,6 +24,7 @@ import (
 
 	"github.com/prometheus/prometheus/scrape"
 	"github.com/stretchr/testify/require"
+	kscrape "tkestack.io/kvass/pkg/scrape"
 )
 
 func TestScrapeStatus_SetScrapeErr(t *testing.T) {
@@ -43,9 +44,11 @@ func TestScrapeStatus_SetScrapeErr(t *testing.T) {
 func TestScrapeStatus_UpdateSamples(t *testing.T) {
 	r := require.New(t)
 	st := NewScrapeStatus(1)
-	st.UpdateSeries(2)
-	st.UpdateSeries(2)
-	st.UpdateSeries(2)
-	st.UpdateSeries(2)
+	rs := kscrape.NewStatisticsSeriesResult()
+	rs.ScrappedTotal = 2
+	st.UpdateScrapeResult(rs)
+	st.UpdateScrapeResult(rs)
+	st.UpdateScrapeResult(rs)
+	st.UpdateScrapeResult(rs)
 	r.Equal(int64(2), st.Series)
 }

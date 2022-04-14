@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"tkestack.io/kvass/pkg/api"
 	"tkestack.io/kvass/pkg/prom"
+	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/shard"
 	"tkestack.io/kvass/pkg/target"
 	"tkestack.io/kvass/pkg/utils/test"
@@ -295,6 +296,118 @@ scrape_configs:
 			r, ret := api.TestCall(t, svc.ginEngine.ServeHTTP, "/api/v1/status/config/", http.MethodPost, string(data), nil)
 			r.Equal(c.wantUpdated, updated)
 			r.Equal(c.wantErr, ret.Status == api.StatusError)
+		})
+	}
+}
+
+func TestNewService_getJobSamples(t *testing.T) {
+	type caseInfo struct {
+		uri           string
+		targetManager *TargetsManager
+		wantResutl    map[string]*scrape.StatisticsSeriesResult
+	}
+
+	successCase := func() *caseInfo {
+		tm := NewTargetsManager(t.TempDir(), prometheus.NewRegistry(), logrus.New())
+		tm.UpdateTargets(&shard.UpdateTargetsRequest{
+			Targets: map[string][]*target.Target{
+				"a": {
+					{
+						Hash: 1,
+					},
+					{
+						Hash: 2,
+					},
+				},
+			},
+		})
+
+		tm.TargetsInfo().Status[1] = &target.ScrapeStatus{
+			LastScrapeStatistics: &scrape.StatisticsSeriesResult{
+				ScrappedTotal: 1,
+				MetricsTotal: map[string]*scrape.MetricSamplesInfo{
+					"test": {
+						Total:    2,
+						Scrapped: 1,
+					},
+				},
+			},
+		}
+
+		tm.TargetsInfo().Status[2] = &target.ScrapeStatus{
+			LastScrapeStatistics: &scrape.StatisticsSeriesResult{
+				ScrappedTotal: 1,
+				MetricsTotal: map[string]*scrape.MetricSamplesInfo{
+					"test": {
+						Total:    2,
+						Scrapped: 1,
+					},
+					"test2": {
+						Total:    1,
+						Scrapped: 0,
+					},
+				},
+			},
+		}
+
+		return &caseInfo{
+			uri:           "/api/v1/shard/samples/",
+			targetManager: tm,
+			wantResutl: map[string]*scrape.StatisticsSeriesResult{
+				"a": {
+					ScrappedTotal: 2,
+					MetricsTotal:  map[string]*scrape.MetricSamplesInfo{},
+				},
+			},
+		}
+	}
+	var cases = []struct {
+		desc       string
+		updateCase func(c *caseInfo)
+	}{
+		{
+			desc:       "no job filter, witout metrics detail",
+			updateCase: func(c *caseInfo) {},
+		},
+		{
+			desc: "no job filter, with metrics detail",
+			updateCase: func(c *caseInfo) {
+				c.uri = "/api/v1/shard/samples/?with_metrics_detail=true"
+				c.wantResutl = map[string]*scrape.StatisticsSeriesResult{
+					"a": {
+						ScrappedTotal: 2,
+						MetricsTotal: map[string]*scrape.MetricSamplesInfo{
+							"test": {
+								Total:    4,
+								Scrapped: 2,
+							},
+							"test2": {
+								Total:    1,
+								Scrapped: 0,
+							},
+						},
+					},
+				}
+			},
+		},
+		{
+			desc: "with job filter, without metrics detail",
+			updateCase: func(c *caseInfo) {
+				c.uri = "/api/v1/shard/samples/?job=xxx"
+				c.wantResutl = make(map[string]*scrape.StatisticsSeriesResult)
+			},
+		},
+	}
+	for _, cs := range cases {
+		t.Run(cs.desc, func(t *testing.T) {
+			c := successCase()
+			cs.updateCase(c)
+
+			svc := NewService("", "", nil, nil, c.targetManager, prometheus.NewRegistry(), logrus.New())
+			resp := map[string]*scrape.StatisticsSeriesResult{}
+			r, _ := api.TestCall(t, svc.ginEngine.ServeHTTP, c.uri, http.MethodGet, "", &resp)
+
+			r.Equal(c.wantResutl, resp)
 		})
 	}
 }

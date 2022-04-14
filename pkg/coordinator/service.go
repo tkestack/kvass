@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strings"
+	"time"
 
 	"tkestack.io/kvass/pkg/shard"
 	"tkestack.io/kvass/pkg/utils/types"
@@ -28,9 +30,11 @@ import (
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/scrape"
 	v1 "github.com/prometheus/prometheus/web/api/v1"
 	"github.com/sirupsen/logrus"
+	kscrape "tkestack.io/kvass/pkg/scrape"
 
 	"tkestack.io/kvass/pkg/api"
 	"tkestack.io/kvass/pkg/discovery"
@@ -42,18 +46,20 @@ import (
 type Service struct {
 	// gin.Engine is the gin engine for handle http request
 	*gin.Engine
-	configFile       string
-	lg               logrus.FieldLogger
-	cfgManager       *prom.ConfigManager
-	getScrapeStatus  func() map[uint64]*target.ScrapeStatus
-	getActiveTargets func() map[string][]*discovery.SDTargets
-	getDropTargets   func() map[string][]*discovery.SDTargets
+	configFile              string
+	lg                      logrus.FieldLogger
+	cfgManager              *prom.ConfigManager
+	getScrapeStatus         func() map[uint64]*target.ScrapeStatus
+	getLastScrapeStatistics func(jobName string, withoutMetricsDetail bool) (map[string]*kscrape.StatisticsSeriesResult, error)
+	getActiveTargets        func() map[string][]*discovery.SDTargets
+	getDropTargets          func() map[string][]*discovery.SDTargets
 }
 
 // NewService return a new web server
 func NewService(
 	configFile string,
 	cfgManager *prom.ConfigManager,
+	getLastScrapeStatistics func(jobName string, withoutMetricsDetail bool) (map[string]*kscrape.StatisticsSeriesResult, error),
 	getScrapeStatus func() map[uint64]*target.ScrapeStatus,
 	getActiveTargets func() map[string][]*discovery.SDTargets,
 	getDropTargets func() map[string][]*discovery.SDTargets,
@@ -61,13 +67,14 @@ func NewService(
 	lg logrus.FieldLogger) *Service {
 
 	w := &Service{
-		configFile:       configFile,
-		Engine:           gin.Default(),
-		lg:               lg,
-		cfgManager:       cfgManager,
-		getScrapeStatus:  getScrapeStatus,
-		getActiveTargets: getActiveTargets,
-		getDropTargets:   getDropTargets,
+		configFile:              configFile,
+		Engine:                  gin.Default(),
+		lg:                      lg,
+		cfgManager:              cfgManager,
+		getScrapeStatus:         getScrapeStatus,
+		getActiveTargets:        getActiveTargets,
+		getDropTargets:          getDropTargets,
+		getLastScrapeStatistics: getLastScrapeStatistics,
 	}
 
 	pprof.Register(w.Engine)
@@ -75,9 +82,8 @@ func NewService(
 	h := api.NewHelper(lg, promRegistry, "kvass_coordinator")
 	w.GET("/metrics", h.MetricsHandler)
 	w.GET("/api/v1/targets", h.Wrap(w.targets))
-	w.GET("/api/v1/shard/runtimeinfo", h.Wrap(w.runtimeInfo))
-	w.GET("/api/v1/metricsinfo", h.Wrap(w.metricsInfo))
-
+	w.GET("/api/v1/runtimeinfo", h.Wrap(w.runtimeInfo))
+	w.GET("/api/v1/samples", h.Wrap(w.samples))
 	w.POST("/-/reload", h.Wrap(func(ctx *gin.Context) *api.Result {
 		if err := w.cfgManager.ReloadFromFile(configFile); err != nil {
 			return api.BadDataErr(err, "reload failed")
@@ -91,17 +97,39 @@ func NewService(
 	return w
 }
 
-func (s *Service) metricsInfo(ctx *gin.Context) *api.Result {
-	ret := &MetricsInfo{
-		LastSamples: map[string]uint64{},
+// samples return last scrape samples rate
+func (s *Service) samples(ctx *gin.Context) *api.Result {
+	var (
+		targetJob  = ctx.Query("job")
+		withDetail = ctx.Query("with_metrics_detail")
+	)
+	smp, err := s.getLastScrapeStatistics(targetJob, withDetail == "true")
+	if err != nil {
+		s.lg.Errorf(err.Error())
+		return api.InternalErr(err, "")
 	}
-	for _, ss := range s.getScrapeStatus() {
-		for k, v := range ss.LastMetricsSamples {
-			ret.LastSamples[k] += v
-			ret.SamplesTotal += v
+
+	ret := map[string]*kscrape.StatisticsSeriesResult{}
+	for _, job := range s.cfgManager.ConfigInfo().Config.ScrapeConfigs {
+		if targetJob != "" && !strings.Contains(job.JobName, targetJob) {
+			continue
 		}
+
+		sm := smp[job.JobName]
+		if sm == nil {
+			ret[job.JobName] = kscrape.NewStatisticsSeriesResult()
+			continue
+		}
+
+		t := float64(job.ScrapeInterval / model.Duration(time.Second))
+		sm.ScrappedTotal /= t
+		for _, m := range sm.MetricsTotal {
+			m.Total /= t
+			m.Scrapped /= t
+		}
+		ret[job.JobName] = sm
 	}
-	ret.MetricsTotal = uint64(len(ret.LastSamples))
+
 	return api.Data(ret)
 }
 

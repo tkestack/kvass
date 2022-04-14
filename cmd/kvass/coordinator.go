@@ -176,6 +176,7 @@ distribution targets to shards`,
 		svc := coordinator.NewService(
 			cdCfg.configFile,
 			cfgManager,
+			cd.LastScrapeStatistics,
 			cd.LastGlobalScrapeStatus,
 			targetDiscovery.ActiveTargets,
 			targetDiscovery.DropTargets,

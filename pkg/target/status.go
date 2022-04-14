@@ -20,6 +20,8 @@ package target
 import (
 	"time"
 
+	kscrape "tkestack.io/kvass/pkg/scrape"
+
 	"github.com/prometheus/prometheus/scrape"
 )
 
@@ -41,9 +43,9 @@ type ScrapeStatus struct {
 	ScrapeTimes uint64 `json:"ScrapeTimes"`
 	// Shards contains ID of shards that is scraping this target
 	Shards []string `json:"shards"`
-	// LastMetricsSamples is metrics sample statistics of last scrape
-	LastMetricsSamples map[string]uint64 `json:"lastMetricsSamples"`
-	lastSeries         []int64
+	// LastScrapeStatistics is samples statistics of last scrape
+	LastScrapeStatistics *kscrape.StatisticsSeriesResult `json:"-"`
+	lastSeries           []int64
 }
 
 // SetScrapeErr mark the result of this scraping
@@ -64,20 +66,20 @@ func (t *ScrapeStatus) SetScrapeErr(start time.Time, err error) {
 // NewScrapeStatus create a new ScrapeStatus with referential series
 func NewScrapeStatus(series int64) *ScrapeStatus {
 	return &ScrapeStatus{
-		Series:             series,
-		Health:             scrape.HealthUnknown,
-		LastMetricsSamples: map[string]uint64{},
+		Series:               series,
+		Health:               scrape.HealthUnknown,
+		LastScrapeStatistics: kscrape.NewStatisticsSeriesResult(),
 	}
 }
 
-// UpdateSeries statistic target samples info
-func (t *ScrapeStatus) UpdateSeries(load int64) {
+// UpdateScrapeResult statistic target samples info
+func (t *ScrapeStatus) UpdateScrapeResult(r *kscrape.StatisticsSeriesResult) {
 	if len(t.lastSeries) < 3 {
-		t.lastSeries = append(t.lastSeries, load)
+		t.lastSeries = append(t.lastSeries, int64(r.ScrappedTotal))
 	} else {
 		newSeries := make([]int64, 0)
 		newSeries = append(newSeries, t.lastSeries[1:]...)
-		newSeries = append(newSeries, load)
+		newSeries = append(newSeries, int64(r.ScrappedTotal))
 		t.lastSeries = newSeries
 	}
 
@@ -87,4 +89,5 @@ func (t *ScrapeStatus) UpdateSeries(load int64) {
 	}
 
 	t.Series = int64(float64(total) / float64(len(t.lastSeries)))
+	t.LastScrapeStatistics = r
 }

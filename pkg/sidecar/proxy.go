@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"sync"
 	"time"
 
 	parser "github.com/VictoriaMetrics/VictoriaMetrics/lib/protoparser/prometheus"
@@ -30,7 +29,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/target"
-	"tkestack.io/kvass/pkg/utils/types"
 )
 
 var (
@@ -113,23 +111,14 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	scraper := scrape.NewScraper(jobInfo, realURL.String(), p.log)
 	scraper.WithRawWriter(w)
 	if err := scraper.RequestTo(); err != nil {
-		scrapErr = fmt.Errorf("RequestTo %v", err)
+		scrapErr = fmt.Errorf("RequestTo %s  %s %v", job, realURL.String(), err)
 		return
 	}
 	w.Header().Set("Content-Type", scraper.HTTPResponse.Header.Get("Content-Type"))
 
-	series := int64(0)
-	lastMetricsStat := map[string]uint64{}
-	lk := sync.Mutex{}
+	rs := scrape.NewStatisticsSeriesResult()
 	if err := scraper.ParseResponse(func(rows []parser.Row) error {
-		series += scrape.StatisticSeries(rows, jobInfo.Config.MetricRelabelConfigs)
-		lk.Lock()
-		defer lk.Unlock()
-
-		for _, r := range rows {
-			s := types.DeepCopyString(r.Metric)
-			lastMetricsStat[s]++
-		}
+		scrape.StatisticSeries(rows, jobInfo.Config.MetricRelabelConfigs, rs)
 		return nil
 	}); err != nil {
 		scrapErr = fmt.Errorf("copy data to prometheus failed %v", err)
@@ -139,11 +128,10 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	proxySeries.WithLabelValues(jobInfo.Config.JobName, realURL.String()).Set(float64(series))
+	proxySeries.WithLabelValues(jobInfo.Config.JobName, realURL.String()).Set(float64(rs.ScrappedTotal))
 	proxyScrapeDurtion.WithLabelValues(jobInfo.Config.JobName, realURL.String()).Set(float64(time.Now().Sub(start)))
 	if tar != nil {
-		tar.LastMetricsSamples = lastMetricsStat
-		tar.UpdateSeries(series)
+		tar.UpdateScrapeResult(rs)
 	}
 }
 

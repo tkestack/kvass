@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	kscrape "tkestack.io/kvass/pkg/scrape"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/scrape"
 	"github.com/sirupsen/logrus"
@@ -39,6 +41,7 @@ type testingShard struct {
 	targetStatus  map[uint64]*target.ScrapeStatus
 	resultTargets shard.UpdateTargetsRequest
 	wantTargets   shard.UpdateTargetsRequest
+	samplesInfo   map[uint64]*kscrape.StatisticsSeriesResult
 }
 
 func (ts *testingShard) assert(t *testing.T) {
@@ -69,6 +72,7 @@ func (f *fakeShardsManager) Shards() ([]*shard.Shard, error) {
 			dm := map[string]interface{}{
 				"/api/v1/shard/targets/":     temp.targetStatus,
 				"/api/v1/shard/runtimeinfo/": temp.rtInfo,
+				"/api/v1/shard/samples/":     temp.samplesInfo,
 			}
 			return test.CopyJSON(ret, dm[url])
 		}
@@ -651,4 +655,8 @@ func TestCoordinator_LastGlobalScrapeStatus(t *testing.T) {
 	g := c.LastGlobalScrapeStatus()
 	r.NotNil(g[1])
 	r.NotNil(g[2])
+}
+
+func TestCoordinator_LastScrapeStatistics(t *testing.T) {
+
 }

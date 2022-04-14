@@ -17,12 +17,20 @@
 
 package coordinator
 
-// MetricsInfo contains statistic of metrics
-type MetricsInfo struct {
-	// MetricsTotal show total metrics in last scrape
-	MetricsTotal uint64 `json:"metricsTotal"`
-	//
-	SamplesTotal uint64 `json:"samplesTotal"`
-	// LastSamples show the last samples of all metrics
-	LastSamples map[string]uint64 `json:"lastSamples"`
+// SamplesInfo contains statistic of sample scraped rate
+type SamplesInfo struct {
+	// SamplesRate is total sample rate in last scrape
+	SamplesRate uint64 `json:"samplesRate"`
+	// JobsSamplesRate show total sample rate in last scrape about a job
+	JobsSamplesRate []*JobSamplesInfo `json:"jobsSamplesRate"`
+}
+
+// JobSamplesInfo show total sample rate in last scrape
+type JobSamplesInfo struct {
+	// JobName is the name of this job
+	JobName string `json:"jobName"`
+	// SamplesRateTotal is the total samples rate of this job' targets
+	SamplesRate uint64 `json:"samplesRateTotal"`
+	// MetricsSamplesRate indicate the metrics samples rate
+	MetricsSamplesRate map[string]uint64 `json:"metricsSamplesRate"`
 }
