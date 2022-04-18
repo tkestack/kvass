@@ -45,7 +45,7 @@ func TestScrapeStatus_UpdateSamples(t *testing.T) {
 	r := require.New(t)
 	st := NewScrapeStatus(1)
 	rs := kscrape.NewStatisticsSeriesResult()
-	rs.ScrappedTotal = 2
+	rs.ScrapedTotal = 2
 	st.UpdateScrapeResult(rs)
 	st.UpdateScrapeResult(rs)
 	st.UpdateScrapeResult(rs)

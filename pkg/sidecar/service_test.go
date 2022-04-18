@@ -324,11 +324,11 @@ func TestNewService_getJobSamples(t *testing.T) {
 
 		tm.TargetsInfo().Status[1] = &target.ScrapeStatus{
 			LastScrapeStatistics: &scrape.StatisticsSeriesResult{
-				ScrappedTotal: 1,
+				ScrapedTotal: 1,
 				MetricsTotal: map[string]*scrape.MetricSamplesInfo{
 					"test": {
-						Total:    2,
-						Scrapped: 1,
+						Total:   2,
+						Scraped: 1,
 					},
 				},
 			},
@@ -336,15 +336,15 @@ func TestNewService_getJobSamples(t *testing.T) {
 
 		tm.TargetsInfo().Status[2] = &target.ScrapeStatus{
 			LastScrapeStatistics: &scrape.StatisticsSeriesResult{
-				ScrappedTotal: 1,
+				ScrapedTotal: 1,
 				MetricsTotal: map[string]*scrape.MetricSamplesInfo{
 					"test": {
-						Total:    2,
-						Scrapped: 1,
+						Total:   2,
+						Scraped: 1,
 					},
 					"test2": {
-						Total:    1,
-						Scrapped: 0,
+						Total:   1,
+						Scraped: 0,
 					},
 				},
 			},
@@ -355,8 +355,8 @@ func TestNewService_getJobSamples(t *testing.T) {
 			targetManager: tm,
 			wantResutl: map[string]*scrape.StatisticsSeriesResult{
 				"a": {
-					ScrappedTotal: 2,
-					MetricsTotal:  map[string]*scrape.MetricSamplesInfo{},
+					ScrapedTotal: 2,
+					MetricsTotal: map[string]*scrape.MetricSamplesInfo{},
 				},
 			},
 		}
@@ -375,15 +375,15 @@ func TestNewService_getJobSamples(t *testing.T) {
 				c.uri = "/api/v1/shard/samples/?with_metrics_detail=true"
 				c.wantResutl = map[string]*scrape.StatisticsSeriesResult{
 					"a": {
-						ScrappedTotal: 2,
+						ScrapedTotal: 2,
 						MetricsTotal: map[string]*scrape.MetricSamplesInfo{
 							"test": {
-								Total:    4,
-								Scrapped: 2,
+								Total:   4,
+								Scraped: 2,
 							},
 							"test2": {
-								Total:    1,
-								Scrapped: 0,
+								Total:   1,
+								Scraped: 0,
 							},
 						},
 					},

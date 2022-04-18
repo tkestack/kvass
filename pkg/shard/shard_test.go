@@ -151,12 +151,12 @@ func TestShard_Samples(t *testing.T) {
 		detail := ul.Query().Get("with_metrics_detail")
 		data := map[string]*kscrape.StatisticsSeriesResult{}
 		res := kscrape.NewStatisticsSeriesResult()
-		res.ScrappedTotal = 1
+		res.ScrapedTotal = 1
 		if detail == "true" {
 			res.MetricsTotal = map[string]*kscrape.MetricSamplesInfo{
 				"test": {
-					Total:    2,
-					Scrapped: 1,
+					Total:   2,
+					Scraped: 1,
 				},
 			}
 		}
@@ -180,8 +180,8 @@ func TestShard_Samples(t *testing.T) {
 			withDetail: false,
 			wantResult: map[string]*kscrape.StatisticsSeriesResult{
 				"job1": {
-					ScrappedTotal: 1,
-					MetricsTotal:  map[string]*kscrape.MetricSamplesInfo{},
+					ScrapedTotal: 1,
+					MetricsTotal: map[string]*kscrape.MetricSamplesInfo{},
 				},
 			},
 		},
@@ -196,8 +196,8 @@ func TestShard_Samples(t *testing.T) {
 			withDetail: false,
 			wantResult: map[string]*kscrape.StatisticsSeriesResult{
 				"job1": {
-					ScrappedTotal: 1,
-					MetricsTotal:  map[string]*kscrape.MetricSamplesInfo{},
+					ScrapedTotal: 1,
+					MetricsTotal: map[string]*kscrape.MetricSamplesInfo{},
 				},
 			},
 		},
@@ -206,11 +206,11 @@ func TestShard_Samples(t *testing.T) {
 			withDetail: true,
 			wantResult: map[string]*kscrape.StatisticsSeriesResult{
 				"job1": {
-					ScrappedTotal: 1,
+					ScrapedTotal: 1,
 					MetricsTotal: map[string]*kscrape.MetricSamplesInfo{
 						"test": {
-							Total:    2,
-							Scrapped: 1,
+							Total:   2,
+							Scraped: 1,
 						},
 					},
 				},

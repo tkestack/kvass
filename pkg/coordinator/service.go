@@ -122,10 +122,10 @@ func (s *Service) samples(ctx *gin.Context) *api.Result {
 		}
 
 		t := float64(job.ScrapeInterval / model.Duration(time.Second))
-		sm.ScrappedTotal /= t
+		sm.ScrapedTotal /= t
 		for _, m := range sm.MetricsTotal {
 			m.Total /= t
-			m.Scrapped /= t
+			m.Scraped /= t
 		}
 		ret[job.JobName] = sm
 	}

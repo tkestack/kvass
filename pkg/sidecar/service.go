@@ -184,7 +184,7 @@ func (s *Service) samples(ctx *gin.Context) *api.Result {
 				continue
 			}
 
-			result.ScrappedTotal += s.LastScrapeStatistics.ScrappedTotal
+			result.ScrapedTotal += s.LastScrapeStatistics.ScrapedTotal
 			if withMetricsDetail == "true" {
 				for k, v := range s.LastScrapeStatistics.MetricsTotal {
 					m := result.MetricsTotal[k]
@@ -192,7 +192,7 @@ func (s *Service) samples(ctx *gin.Context) *api.Result {
 						m = &scrape.MetricSamplesInfo{}
 						result.MetricsTotal[k] = m
 					}
-					m.Scrapped += v.Scrapped
+					m.Scraped += v.Scraped
 					m.Total += v.Total
 				}
 			}

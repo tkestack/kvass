@@ -111,11 +111,11 @@ func (s *Scraper) ParseResponse(do func(rows []parser.Row) error) error {
 
 // StatisticsSeriesResult is the samples count in one scrape
 type StatisticsSeriesResult struct {
-	lk sync.Mutex
-	// ScrappedTotal is samples number total after relabel
-	ScrappedTotal float64
+	lk sync.Mutex `json:"-"`
+	// ScrapedTotal is samples number total after relabel
+	ScrapedTotal float64 `json:"scrapedTotal"`
 	// MetricsTotal is samples number info about all metrics
-	MetricsTotal map[string]*MetricSamplesInfo
+	MetricsTotal map[string]*MetricSamplesInfo `json:"metricsTotal"`
 }
 
 // NewStatisticsSeriesResult return an empty StatisticsSeriesResult
@@ -128,9 +128,9 @@ func NewStatisticsSeriesResult() *StatisticsSeriesResult {
 // MetricSamplesInfo statistics sample about one metric
 type MetricSamplesInfo struct {
 	// Total is total samples appeared in this scape
-	Total float64
-	// Scrapped is samples number after relabel
-	Scrapped float64
+	Total float64 `json:"total"`
+	// Scraped is samples number after relabel
+	Scraped float64 `json:"scraped"`
 }
 
 // StatisticSeries statistic load from metrics raw data
@@ -159,8 +159,8 @@ func StatisticSeries(rows []parser.Row, rc []*relabel.Config, result *Statistics
 		}
 
 		if newSets := relabel.Process(lset, rc...); newSets != nil {
-			result.ScrappedTotal++
-			result.MetricsTotal[n].Scrapped++
+			result.ScrapedTotal++
+			result.MetricsTotal[n].Scraped++
 		}
 	}
 }

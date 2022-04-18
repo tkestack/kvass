@@ -47,15 +47,15 @@ func TestStatisticSample(t *testing.T) {
 		},
 	}, r)
 	require.Equal(t, r, &StatisticsSeriesResult{
-		ScrappedTotal: 1,
+		ScrapedTotal: 1,
 		MetricsTotal: map[string]*MetricSamplesInfo{
 			"a": {
-				Total:    1,
-				Scrapped: 0,
+				Total:   1,
+				Scraped: 0,
 			},
 			"b": {
-				Total:    1,
-				Scrapped: 1,
+				Total:   1,
+				Scraped: 1,
 			},
 		},
 	})

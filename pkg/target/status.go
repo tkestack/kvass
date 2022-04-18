@@ -75,11 +75,11 @@ func NewScrapeStatus(series int64) *ScrapeStatus {
 // UpdateScrapeResult statistic target samples info
 func (t *ScrapeStatus) UpdateScrapeResult(r *kscrape.StatisticsSeriesResult) {
 	if len(t.lastSeries) < 3 {
-		t.lastSeries = append(t.lastSeries, int64(r.ScrappedTotal))
+		t.lastSeries = append(t.lastSeries, int64(r.ScrapedTotal))
 	} else {
 		newSeries := make([]int64, 0)
 		newSeries = append(newSeries, t.lastSeries[1:]...)
-		newSeries = append(newSeries, int64(r.ScrappedTotal))
+		newSeries = append(newSeries, int64(r.ScrapedTotal))
 		t.lastSeries = newSeries
 	}
 

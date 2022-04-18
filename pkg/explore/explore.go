@@ -209,9 +209,9 @@ func (e *Explore) exploreOnce(ctx context.Context, t *exploringTarget) (err erro
 		return errors.Wrapf(err, "explore failed : %s/%s", t.job, url)
 	}
 
-	t.rt.Series = int64(result.ScrappedTotal)
+	t.rt.Series = int64(result.ScrapedTotal)
 
-	t.target.Series = int64(result.ScrappedTotal)
+	t.target.Series = int64(result.ScrapedTotal)
 	t.rt.LastScrapeStatistics = result
 
 	return nil

@@ -148,15 +148,15 @@ func (c *Coordinator) LastScrapeStatistics(jobName string, withMetricsDetail boo
 						rp[job] = item
 					}
 
-					item.ScrappedTotal += result.ScrappedTotal
+					item.ScrapedTotal += result.ScrapedTotal
 					for k, m := range result.MetricsTotal {
 						mi := item.MetricsTotal[k]
 						if mi == nil {
 							mi = &scrape.MetricSamplesInfo{}
 							item.MetricsTotal[k] = mi
 						}
-						mi.Total += m.Scrapped
-						mi.Scrapped += m.Scrapped
+						mi.Total += m.Total
+						mi.Scraped += m.Scraped
 					}
 				}
 				return nil

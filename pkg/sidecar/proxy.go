@@ -128,7 +128,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	proxySeries.WithLabelValues(jobInfo.Config.JobName, realURL.String()).Set(float64(rs.ScrappedTotal))
+	proxySeries.WithLabelValues(jobInfo.Config.JobName, realURL.String()).Set(float64(rs.ScrapedTotal))
 	proxyScrapeDurtion.WithLabelValues(jobInfo.Config.JobName, realURL.String()).Set(float64(time.Now().Sub(start)))
 	if tar != nil {
 		tar.UpdateScrapeResult(rs)
