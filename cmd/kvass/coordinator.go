@@ -315,8 +315,12 @@ func configInjectServiceAccount(job *config.ScrapeConfig, option *configInjectOp
 			job.HTTPClientConfig.TLSConfig.CAFile = path.Join(option.kubernetes.serviceAccountPath, "ca.crt")
 		}
 
-		if job.HTTPClientConfig.BearerTokenFile == "" || job.HTTPClientConfig.BearerTokenFile == "/var/run/secrets/kubernetes.io/serviceaccount/token" {
+		if job.HTTPClientConfig.BearerTokenFile == "/var/run/secrets/kubernetes.io/serviceaccount/token" {
 			job.HTTPClientConfig.BearerTokenFile = path.Join(option.kubernetes.serviceAccountPath, "token")
+		}
+
+		if job.HTTPClientConfig.Authorization != nil && job.HTTPClientConfig.Authorization.CredentialsFile == "/var/run/secrets/kubernetes.io/serviceaccount/token" {
+			job.HTTPClientConfig.Authorization.CredentialsFile = path.Join(option.kubernetes.serviceAccountPath, "token")
 		}
 	}
 }

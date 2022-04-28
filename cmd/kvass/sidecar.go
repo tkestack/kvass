@@ -18,8 +18,6 @@
 package main
 
 import (
-	"path"
-
 	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/sidecar"
 	"tkestack.io/kvass/pkg/target"
@@ -178,14 +176,7 @@ func configInjectSidecar(cfg *config.Config, option *configInjectOption) error {
 	}
 
 	for _, job := range cfg.ScrapeConfigs {
-		if option.kubernetes.serviceAccountPath != "" {
-			if job.HTTPClientConfig.TLSConfig.CAFile == "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" {
-				job.HTTPClientConfig.TLSConfig.CAFile = path.Join(option.kubernetes.serviceAccountPath, "ca.crt")
-			}
-			if job.HTTPClientConfig.BearerTokenFile == "" || job.HTTPClientConfig.BearerTokenFile == "/var/run/secrets/kubernetes.io/serviceaccount/token" {
-				job.HTTPClientConfig.BearerTokenFile = path.Join(option.kubernetes.serviceAccountPath, "token")
-			}
-		}
+		configInjectServiceAccount(job, option)
 	}
 	return nil
 }

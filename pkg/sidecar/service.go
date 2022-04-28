@@ -77,6 +77,9 @@ func NewService(
 	s.ginEngine.GET(s.localPath("/api/v1/shard/targets/status/"), h.Wrap(func(ctx *gin.Context) *api.Result {
 		return api.Data(s.targetManager.TargetsInfo().Status)
 	}))
+	s.ginEngine.GET(s.localPath("/api/v1/shard/targets/"), h.Wrap(func(ctx *gin.Context) *api.Result {
+		return api.Data(s.targetManager.TargetsInfo().Status)
+	}))
 	s.ginEngine.GET(s.localPath("/api/v1/shard/samples/"), h.Wrap(s.samples))
 	s.ginEngine.POST(s.localPath("/api/v1/shard/targets/"), h.Wrap(s.updateTargets))
 	s.ginEngine.POST(s.localPath("/-/reload/"), h.Wrap(func(ctx *gin.Context) *api.Result {
