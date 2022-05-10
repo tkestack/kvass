@@ -34,3 +34,17 @@ type JobSamplesInfo struct {
 	// MetricsSamplesRate indicate the metrics samples rate
 	MetricsSamplesRate map[string]uint64 `json:"metricsSamplesRate"`
 }
+
+type space struct {
+	headSpace    int64
+	processSpace int64
+}
+
+func (s *space) add(src space) {
+	s.headSpace += src.headSpace
+	s.processSpace += src.processSpace
+}
+
+func (s *space) isZero() bool {
+	return s.headSpace == 0 && s.processSpace == 0
+}

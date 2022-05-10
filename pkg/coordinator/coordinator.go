@@ -49,8 +49,10 @@ var (
 
 // Option indicate all coordinate arguments
 type Option struct {
-	// MaxSeries is max series every shard can assign
-	MaxSeries int64
+	// MaxHeadSeries is max series after metrics_relabels every shard can assign
+	MaxHeadSeries int64
+	// MaxProcessSeries is max series before metrics_relabels every shard can assign
+	MaxProcessSeries int64
 	// MaxShard is the max number we can scale up to
 	MaxShard int32
 	// MinShard is the min shard number that coordinator need
@@ -188,6 +190,10 @@ func (c *Coordinator) runOnce() (err error) {
 		return errors.Wrap(err, "get replicas")
 	}
 
+	if len(replicas) == 0 {
+		return errors.New("no shards replicas is found")
+	}
+
 	newLastGlobalScrapeStatus := map[uint64]*target.ScrapeStatus{}
 	for _, repItem := range replicas {
 		shards, err := repItem.Shards()
@@ -212,11 +218,11 @@ func (c *Coordinator) runOnce() (err error) {
 		lastGlobalScrapeStatus := c.globalScrapeStatus(active, shardsInfo)
 		c.gcTargets(changeAbleShards, active)
 		needSpace := c.alleviateShards(changeAbleShards)
-		needSpace += c.assignNoScrapingTargets(shardsInfo, active, lastGlobalScrapeStatus)
+		needSpace.add(c.assignNoScrapingTargets(shardsInfo, active, lastGlobalScrapeStatus))
 
 		scale := int32(len(shardsInfo))
-		if needSpace != 0 {
-			c.log.Infof("need space %d", needSpace)
+		if !needSpace.isZero() {
+			c.log.Infof("need space head space = %d, process space = %d", needSpace.headSpace, needSpace.processSpace)
 			scale = c.tryScaleUp(shardsInfo, needSpace)
 		} else if c.option.MaxIdleTime != 0 {
 			scale = c.tryScaleDown(shardsInfo)

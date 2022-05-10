@@ -125,17 +125,20 @@ func (s *Service) runtimeInfo(g *gin.Context) *api.Result {
 	targets := s.targetManager.TargetsInfo()
 
 	min := int64(0)
+	total := int64(0)
 	for _, r := range targets.Status {
 		min += r.Series
+		total += r.TotalSeries
 	}
 
 	if series < min {
 		series = min
 	}
 	return api.Data(&shard.RuntimeInfo{
-		HeadSeries:  series,
-		ConfigHash:  s.cfgManager.ConfigInfo().ConfigHash,
-		IdleStartAt: targets.IdleAt,
+		HeadSeries:    series,
+		ProcessSeries: total,
+		ConfigHash:    s.cfgManager.ConfigInfo().ConfigHash,
+		IdleStartAt:   targets.IdleAt,
 	})
 }
 

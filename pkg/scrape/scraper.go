@@ -114,6 +114,8 @@ type StatisticsSeriesResult struct {
 	lk sync.Mutex `json:"-"`
 	// ScrapedTotal is samples number total after relabel
 	ScrapedTotal float64 `json:"scrapedTotal"`
+	// Total is total samples appeared in this scape
+	Total float64 `json:"total"`
 	// MetricsTotal is samples number info about all metrics
 	MetricsTotal map[string]*MetricSamplesInfo `json:"metricsTotal"`
 }
@@ -158,6 +160,7 @@ func StatisticSeries(rows []parser.Row, rc []*relabel.Config, result *Statistics
 			})
 		}
 
+		result.Total++
 		if newSets := relabel.Process(lset, rc...); newSets != nil {
 			result.ScrapedTotal++
 			result.MetricsTotal[n].Scraped++

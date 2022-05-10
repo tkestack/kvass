@@ -37,6 +37,8 @@ type ScrapeStatus struct {
 	Health scrape.TargetHealth `json:"health"`
 	// Series is the avg load of last 3 times scraping, metrics_relabel_configs will be process
 	Series int64 `json:"series"`
+	// TotalSeries is the total series in last scraping, without metrics_relabel_configs
+	TotalSeries int64 `json:"totalSeries"`
 	// TargetState indicate current state of this target
 	TargetState string `json:"TargetState"`
 	// ScrapeTimes is the times target scraped by this shard
@@ -64,9 +66,10 @@ func (t *ScrapeStatus) SetScrapeErr(start time.Time, err error) {
 }
 
 // NewScrapeStatus create a new ScrapeStatus with referential series
-func NewScrapeStatus(series int64) *ScrapeStatus {
+func NewScrapeStatus(series, total int64) *ScrapeStatus {
 	return &ScrapeStatus{
 		Series:               series,
+		TotalSeries:          total,
 		Health:               scrape.HealthUnknown,
 		LastScrapeStatistics: kscrape.NewStatisticsSeriesResult(),
 	}
@@ -89,5 +92,6 @@ func (t *ScrapeStatus) UpdateScrapeResult(r *kscrape.StatisticsSeriesResult) {
 	}
 
 	t.Series = int64(float64(total) / float64(len(t.lastSeries)))
+	t.TotalSeries = int64(r.Total)
 	t.LastScrapeStatistics = r
 }
