@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"path"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/prometheus/config"
 	prom_discovery "github.com/prometheus/prometheus/discovery"
+	httpsd "github.com/prometheus/prometheus/discovery/http"
 	k8sd "github.com/prometheus/prometheus/discovery/kubernetes"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -275,6 +277,13 @@ func configInject(cfg *config.Config, option *configInjectOption) error {
 			ksd, ok := sd.(*k8sd.SDConfig)
 			if ok {
 				configInjectK8s(ksd, option)
+			}
+			hsd, ok := sd.(*httpsd.SDConfig)
+			if ok && os.Getenv("SCRAPE_PROXY") != "" {
+				if hsd.HTTPClientConfig.ProxyURL.URL == nil {
+					u, _ := url.Parse(os.Getenv("SCRAPE_PROXY"))
+					hsd.HTTPClientConfig.ProxyURL = config_util.URL{URL: u}
+				}
 			}
 		}
 		configInjectServiceAccount(job, option)
