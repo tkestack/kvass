@@ -105,6 +105,9 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if scrapErr != nil {
 			p.log.Errorf(scrapErr.Error())
 			w.WriteHeader(http.StatusBadRequest)
+			if tar != nil {
+				tar.LastScrapeStatistics = scrape.NewStatisticsSeriesResult()
+			}
 		}
 	}()
 
