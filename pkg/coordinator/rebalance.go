@@ -437,7 +437,6 @@ func (c *Coordinator) assignNoScrapingTargets(
 		// try get free shard which can hold this target
 		sd := c.getFreeShard(healthShards, tarSp)
 		if sd != nil {
-			c.log.Infof("schedule target %s, total series = %d, scraped series %d , to %s",status.)
 			sd.runtime.HeadSeries += status.Series
 			sd.runtime.ProcessSeries += status.TotalSeries
 			sd.scraping[hash] = status
