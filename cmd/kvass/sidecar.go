@@ -41,6 +41,7 @@ var sidecarCfg = struct {
 	fetchHeadSeries        bool
 	configInject           configInjectOption
 	scrapeKeepAliveDisable bool
+	shardMonitor           bool
 }{}
 
 func init() {
@@ -66,6 +67,8 @@ func init() {
 			"must set false if use vmagent (or other scraping agent) instead of prometheus.")
 	sidecarCmd.Flags().BoolVar(&sidecarCfg.scrapeKeepAliveDisable, "scrape.disable-keep-alive", false,
 		"disable http keep alive")
+	sidecarCmd.Flags().BoolVar(&sidecarCfg.shardMonitor, "shard.self-monitor", false,
+		"enable shard monitor")
 	rootCmd.AddCommand(sidecarCmd)
 }
 
@@ -98,8 +101,9 @@ var sidecarCmd = &cobra.Command{
 			injector = sidecar.NewInjector(
 				sidecarCfg.configOutFile,
 				sidecar.InjectConfigOptions{
-					ProxyURL:      sidecarCfg.injectProxyURL,
-					PrometheusURL: sidecarCfg.prometheusURL,
+					ProxyURL:           sidecarCfg.injectProxyURL,
+					PrometheusURL:      sidecarCfg.prometheusURL,
+					ShardMonitorEnable: sidecarCfg.shardMonitor,
 				},
 				promRegistry,
 				lg.WithField("component", "injector"),

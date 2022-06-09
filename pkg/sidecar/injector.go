@@ -62,6 +62,8 @@ type InjectConfigOptions struct {
 	ProxyURL string
 	// PrometheusURL will be injected
 	PrometheusURL string
+	// ShardMonitorEnable is true, a self monitor will be injected
+	ShardMonitorEnable bool
 }
 
 // Injector gen injected config file
@@ -139,33 +141,35 @@ func (i *Injector) injectJobs(cfg *config.Config) error {
 }
 
 func (i *Injector) injectSelfMonitor(cfg *config.Config) {
-	if i.option.PrometheusURL != "" {
-		u, _ := url.Parse(i.option.PrometheusURL)
-		podName := os.Getenv("POD_NAME")
-		ss := strings.Split(podName, "-")
-		shard := "0"
-		if len(ss) > 0 {
-			shard = ss[len(ss)-1]
-		}
+	if !i.option.ShardMonitorEnable {
+		return
+	}
 
-		cfg.ScrapeConfigs = append(cfg.ScrapeConfigs, &config.ScrapeConfig{
-			JobName: "prometheus_shards",
-			ServiceDiscoveryConfigs: []discovery.Config{
-				discovery.StaticConfig([]*targetgroup.Group{
-					{
-						Targets: []model.LabelSet{
-							{
-								model.AddressLabel: model.LabelValue(u.Host),
-							},
-						},
-						Labels: map[model.LabelName]model.LabelValue{
-							"replicate": model.LabelValue(podName),
-							"shard":     model.LabelValue(shard),
+	u, _ := url.Parse(i.option.PrometheusURL)
+	podName := os.Getenv("POD_NAME")
+	ss := strings.Split(podName, "-")
+	shard := "0"
+	if len(ss) > 0 {
+		shard = ss[len(ss)-1]
+	}
+
+	cfg.ScrapeConfigs = append(cfg.ScrapeConfigs, &config.ScrapeConfig{
+		JobName: "prometheus_shards",
+		ServiceDiscoveryConfigs: []discovery.Config{
+			discovery.StaticConfig([]*targetgroup.Group{
+				{
+					Targets: []model.LabelSet{
+						{
+							model.AddressLabel: model.LabelValue(u.Host),
 						},
 					},
-				}),
-			}})
-	}
+					Labels: map[model.LabelName]model.LabelValue{
+						"replicate": model.LabelValue(podName),
+						"shard":     model.LabelValue(shard),
+					},
+				},
+			}),
+		}})
 }
 
 func (i *Injector) marshal(cfg *config.Config) ([]byte, error) {
