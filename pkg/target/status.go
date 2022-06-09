@@ -18,8 +18,11 @@
 package target
 
 import (
-	"github.com/prometheus/prometheus/scrape"
 	"time"
+
+	kscrape "tkestack.io/kvass/pkg/scrape"
+
+	"github.com/prometheus/prometheus/scrape"
 )
 
 // ScrapeStatus contains last scraping status of the target
@@ -39,8 +42,10 @@ type ScrapeStatus struct {
 	// ScrapeTimes is the times target scraped by this shard
 	ScrapeTimes uint64 `json:"ScrapeTimes"`
 	// Shards contains ID of shards that is scraping this target
-	Shards     []string `json:"shards"`
-	lastSeries []int64
+	Shards []string `json:"shards"`
+	// LastScrapeStatistics is samples statistics of last scrape
+	LastScrapeStatistics *kscrape.StatisticsSeriesResult `json:"-"`
+	lastSeries           []int64
 }
 
 // SetScrapeErr mark the result of this scraping
@@ -48,7 +53,7 @@ type ScrapeStatus struct {
 // health will be up if err is nil
 func (t *ScrapeStatus) SetScrapeErr(start time.Time, err error) {
 	t.LastScrape = start
-	t.LastScrapeDuration = time.Now().Sub(start).Seconds()
+	t.LastScrapeDuration = time.Since(start).Seconds()
 	if err == nil {
 		t.LastError = ""
 		t.Health = scrape.HealthGood
@@ -61,19 +66,20 @@ func (t *ScrapeStatus) SetScrapeErr(start time.Time, err error) {
 // NewScrapeStatus create a new ScrapeStatus with referential series
 func NewScrapeStatus(series int64) *ScrapeStatus {
 	return &ScrapeStatus{
-		Series: series,
-		Health: scrape.HealthUnknown,
+		Series:               series,
+		Health:               scrape.HealthUnknown,
+		LastScrapeStatistics: kscrape.NewStatisticsSeriesResult(),
 	}
 }
 
-// UpdateSeries statistic target samples info
-func (t *ScrapeStatus) UpdateSeries(load int64) {
+// UpdateScrapeResult statistic target samples info
+func (t *ScrapeStatus) UpdateScrapeResult(r *kscrape.StatisticsSeriesResult) {
 	if len(t.lastSeries) < 3 {
-		t.lastSeries = append(t.lastSeries, load)
+		t.lastSeries = append(t.lastSeries, int64(r.ScrapedTotal))
 	} else {
 		newSeries := make([]int64, 0)
 		newSeries = append(newSeries, t.lastSeries[1:]...)
-		newSeries = append(newSeries, load)
+		newSeries = append(newSeries, int64(r.ScrapedTotal))
 		t.lastSeries = newSeries
 	}
 
@@ -83,4 +89,5 @@ func (t *ScrapeStatus) UpdateSeries(load int64) {
 	}
 
 	t.Series = int64(float64(total) / float64(len(t.lastSeries)))
+	t.LastScrapeStatistics = r
 }

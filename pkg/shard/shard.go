@@ -19,9 +19,12 @@ package shard
 
 import (
 	"fmt"
+	"net/url"
+
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"tkestack.io/kvass/pkg/api"
+	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/target"
 )
 
@@ -55,6 +58,30 @@ func NewShard(id string, url string, ready bool, log logrus.FieldLogger) *Shard 
 	}
 }
 
+//Samples return the sample statistics of last scrape
+func (r *Shard) Samples(jobName string, withMetricsDetail bool) (map[string]*scrape.StatisticsSeriesResult, error) {
+	ret := map[string]*scrape.StatisticsSeriesResult{}
+	param := url.Values{}
+	if jobName != "" {
+		param["job"] = []string{jobName}
+	}
+	if withMetricsDetail {
+		param["with_metrics_detail"] = []string{"true"}
+	}
+
+	u := r.url + "/api/v1/shard/samples/"
+	if len(param) != 0 {
+		u += "?" + param.Encode()
+	}
+
+	err := r.APIGet(u, &ret)
+	if err != nil {
+		return nil, fmt.Errorf("get samples info from %s failed : %s", r.ID, err.Error())
+	}
+
+	return ret, nil
+}
+
 // RuntimeInfo return the runtime status of this shard
 func (r *Shard) RuntimeInfo() (*RuntimeInfo, error) {
 	res := &RuntimeInfo{}
@@ -71,7 +98,7 @@ func (r *Shard) RuntimeInfo() (*RuntimeInfo, error) {
 func (r *Shard) TargetStatus() (map[uint64]*target.ScrapeStatus, error) {
 	res := map[uint64]*target.ScrapeStatus{}
 
-	err := r.APIGet(r.url+"/api/v1/shard/targets/", &res)
+	err := r.APIGet(r.url+"/api/v1/shard/targets/status/", &res)
 	if err != nil {
 		return res, errors.Wrapf(err, "get targets status info from %s failed, url = %s", r.ID, r.url)
 	}

@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"path"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/prometheus/config"
 	prom_discovery "github.com/prometheus/prometheus/discovery"
+	httpsd "github.com/prometheus/prometheus/discovery/http"
 	k8sd "github.com/prometheus/prometheus/discovery/kubernetes"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -176,6 +178,7 @@ distribution targets to shards`,
 		svc := coordinator.NewService(
 			cdCfg.configFile,
 			cfgManager,
+			cd.LastScrapeStatistics,
 			cd.LastGlobalScrapeStatus,
 			targetDiscovery.ActiveTargets,
 			targetDiscovery.DropTargets,
@@ -275,6 +278,13 @@ func configInject(cfg *config.Config, option *configInjectOption) error {
 			if ok {
 				configInjectK8s(ksd, option)
 			}
+			hsd, ok := sd.(*httpsd.SDConfig)
+			if ok && os.Getenv("SCRAPE_PROXY") != "" {
+				if hsd.HTTPClientConfig.ProxyURL.URL == nil {
+					u, _ := url.Parse(os.Getenv("SCRAPE_PROXY"))
+					hsd.HTTPClientConfig.ProxyURL = config_util.URL{URL: u}
+				}
+			}
 		}
 		configInjectServiceAccount(job, option)
 	}
@@ -314,8 +324,12 @@ func configInjectServiceAccount(job *config.ScrapeConfig, option *configInjectOp
 			job.HTTPClientConfig.TLSConfig.CAFile = path.Join(option.kubernetes.serviceAccountPath, "ca.crt")
 		}
 
-		if job.HTTPClientConfig.BearerTokenFile == "" || job.HTTPClientConfig.BearerTokenFile == "/var/run/secrets/kubernetes.io/serviceaccount/token" {
+		if job.HTTPClientConfig.BearerTokenFile == "/var/run/secrets/kubernetes.io/serviceaccount/token" {
 			job.HTTPClientConfig.BearerTokenFile = path.Join(option.kubernetes.serviceAccountPath, "token")
+		}
+
+		if job.HTTPClientConfig.Authorization != nil && job.HTTPClientConfig.Authorization.CredentialsFile == "/var/run/secrets/kubernetes.io/serviceaccount/token" {
+			job.HTTPClientConfig.Authorization.CredentialsFile = path.Join(option.kubernetes.serviceAccountPath, "token")
 		}
 	}
 }

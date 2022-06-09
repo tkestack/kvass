@@ -64,7 +64,7 @@ type Explore struct {
 
 	retryInterval time.Duration
 	needExplore   chan *exploringTarget
-	explore       func(log logrus.FieldLogger, scrapeInfo *scrape.JobInfo, url string) (int64, error)
+	explore       func(log logrus.FieldLogger, scrapeInfo *scrape.JobInfo, url string) (*scrape.StatisticsSeriesResult, error)
 }
 
 // New create a new Explore
@@ -204,25 +204,28 @@ func (e *Explore) exploreOnce(ctx context.Context, t *exploringTarget) (err erro
 	}
 
 	url := t.target.URL(info.Config).String()
-	series, err := e.explore(e.logger, info, url)
+	result, err := e.explore(e.logger, info, url)
 	if err != nil {
 		return errors.Wrapf(err, "explore failed : %s/%s", t.job, url)
 	}
 
-	t.rt.Series = series
-	t.target.Series = series
+	t.rt.Series = int64(result.ScrapedTotal)
+
+	t.target.Series = int64(result.ScrapedTotal)
+	t.rt.LastScrapeStatistics = result
+
 	return nil
 }
 
-func explore(log logrus.FieldLogger, scrapeInfo *scrape.JobInfo, url string) (int64, error) {
+func explore(log logrus.FieldLogger, scrapeInfo *scrape.JobInfo, url string) (*scrape.StatisticsSeriesResult, error) {
 	scraper := scrape.NewScraper(scrapeInfo, url, log)
 	if err := scraper.RequestTo(); err != nil {
-		return 0, errors.Wrap(err, "request to ")
+		return nil, errors.Wrap(err, "request to ")
 	}
 
-	total := int64(0)
-	return total, scraper.ParseResponse(func(rows []parser.Row) error {
-		total += scrape.StatisticSeries(rows, scrapeInfo.Config.MetricRelabelConfigs)
+	r := scrape.NewStatisticsSeriesResult()
+	return r, scraper.ParseResponse(func(rows []parser.Row) error {
+		scrape.StatisticSeries(rows, scrapeInfo.Config.MetricRelabelConfigs, r)
 		return nil
 	})
 }

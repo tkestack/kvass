@@ -105,20 +105,23 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if scrapErr != nil {
 			p.log.Errorf(scrapErr.Error())
 			w.WriteHeader(http.StatusBadRequest)
+			if tar != nil {
+				tar.LastScrapeStatistics = scrape.NewStatisticsSeriesResult()
+			}
 		}
 	}()
 
 	scraper := scrape.NewScraper(jobInfo, realURL.String(), p.log)
 	scraper.WithRawWriter(w)
 	if err := scraper.RequestTo(); err != nil {
-		scrapErr = fmt.Errorf("RequestTo %v", err)
+		scrapErr = fmt.Errorf("RequestTo %s  %s %v", job, realURL.String(), err)
 		return
 	}
 	w.Header().Set("Content-Type", scraper.HTTPResponse.Header.Get("Content-Type"))
 
-	series := int64(0)
+	rs := scrape.NewStatisticsSeriesResult()
 	if err := scraper.ParseResponse(func(rows []parser.Row) error {
-		series += scrape.StatisticSeries(rows, jobInfo.Config.MetricRelabelConfigs)
+		scrape.StatisticSeries(rows, jobInfo.Config.MetricRelabelConfigs, rs)
 		return nil
 	}); err != nil {
 		scrapErr = fmt.Errorf("copy data to prometheus failed %v", err)
@@ -127,10 +130,11 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	proxySeries.WithLabelValues(jobInfo.Config.JobName, realURL.String()).Set(float64(series))
+
+	proxySeries.WithLabelValues(jobInfo.Config.JobName, realURL.String()).Set(float64(rs.ScrapedTotal))
 	proxyScrapeDurtion.WithLabelValues(jobInfo.Config.JobName, realURL.String()).Set(float64(time.Now().Sub(start)))
 	if tar != nil {
-		tar.UpdateSeries(series)
+		tar.UpdateScrapeResult(rs)
 	}
 }
 

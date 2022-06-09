@@ -217,7 +217,7 @@ func TestAPI_Targets(t *testing.T) {
 	}
 	for _, cs := range cases {
 		t.Run(cs.name, func(t *testing.T) {
-			a := NewService("", prom.NewConfigManager(), getScrapeStatus, getActive, getDrop,
+			a := NewService("", prom.NewConfigManager(), nil, getScrapeStatus, getActive, getDrop,
 				prometheus.NewRegistry(), logrus.New())
 			uri := "/api/v1/targets"
 			if len(cs.param) != 0 {
@@ -234,7 +234,7 @@ func TestAPI_Targets(t *testing.T) {
 }
 
 func TestAPI_RuntimeInfo(t *testing.T) {
-	a := NewService("", prom.NewConfigManager(), func() map[uint64]*target.ScrapeStatus {
+	a := NewService("", prom.NewConfigManager(), nil, func() map[uint64]*target.ScrapeStatus {
 		return map[uint64]*target.ScrapeStatus{
 			1: {
 				Series: 100,
@@ -245,6 +245,6 @@ func TestAPI_RuntimeInfo(t *testing.T) {
 		}
 	}, nil, nil, prometheus.NewRegistry(), logrus.New())
 	res := &shard.RuntimeInfo{}
-	r, _ := api.TestCall(t, a.Engine.ServeHTTP, "/api/v1/shard/runtimeinfo", http.MethodGet, "", res)
+	r, _ := api.TestCall(t, a.Engine.ServeHTTP, "/api/v1/runtimeinfo", http.MethodGet, "", res)
 	r.Equal(int64(200), res.HeadSeries)
 }

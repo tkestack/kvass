@@ -19,7 +19,8 @@ import (
 )
 
 func TestStatisticSample(t *testing.T) {
-	total := StatisticSeries([]prometheus.Row{
+	r := NewStatisticsSeriesResult()
+	StatisticSeries([]prometheus.Row{
 		{
 			Metric: "a",
 			Tags: []prometheus.Tag{
@@ -44,8 +45,20 @@ func TestStatisticSample(t *testing.T) {
 			Regex:        relabel.MustNewRegexp("tv"),
 			Action:       relabel.Drop,
 		},
+	}, r)
+	require.Equal(t, r, &StatisticsSeriesResult{
+		ScrapedTotal: 1,
+		MetricsTotal: map[string]*MetricSamplesInfo{
+			"a": {
+				Total:   1,
+				Scraped: 0,
+			},
+			"b": {
+				Total:   1,
+				Scraped: 1,
+			},
+		},
 	})
-	require.Equal(t, int64(1), total)
 }
 
 func gzippedData(raw []byte) []byte {

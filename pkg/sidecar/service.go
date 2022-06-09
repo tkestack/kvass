@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/cssivision/reverseproxy"
 	"github.com/gin-contrib/pprof"
@@ -29,6 +30,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"tkestack.io/kvass/pkg/api"
 	"tkestack.io/kvass/pkg/prom"
+	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/shard"
 	"tkestack.io/kvass/pkg/utils/types"
 )
@@ -72,9 +74,13 @@ func NewService(
 
 	s.ginEngine.GET(s.localPath("/metrics"), h.MetricsHandler)
 	s.ginEngine.GET(s.localPath("/api/v1/shard/runtimeinfo/"), h.Wrap(s.runtimeInfo))
+	s.ginEngine.GET(s.localPath("/api/v1/shard/targets/status/"), h.Wrap(func(ctx *gin.Context) *api.Result {
+		return api.Data(s.targetManager.TargetsInfo().Status)
+	}))
 	s.ginEngine.GET(s.localPath("/api/v1/shard/targets/"), h.Wrap(func(ctx *gin.Context) *api.Result {
 		return api.Data(s.targetManager.TargetsInfo().Status)
 	}))
+	s.ginEngine.GET(s.localPath("/api/v1/shard/samples/"), h.Wrap(s.samples))
 	s.ginEngine.POST(s.localPath("/api/v1/shard/targets/"), h.Wrap(s.updateTargets))
 	s.ginEngine.POST(s.localPath("/-/reload/"), h.Wrap(func(ctx *gin.Context) *api.Result {
 		if err := s.cfgManager.ReloadFromFile(configFile); err != nil {
@@ -162,4 +168,40 @@ func (s *Service) updateConfig(g *gin.Context) *api.Result {
 	}
 
 	return api.Data(nil)
+}
+
+func (s *Service) samples(ctx *gin.Context) *api.Result {
+	withMetricsDetail := ctx.Query("with_metrics_detail")
+	targetJob := ctx.Query("job")
+	ret := map[string]*scrape.StatisticsSeriesResult{}
+	status := s.targetManager.TargetsInfo().Status
+	for job, ts := range s.targetManager.TargetsInfo().Targets {
+		if targetJob != "" && !strings.Contains(job, targetJob) {
+			continue
+		}
+
+		result := scrape.NewStatisticsSeriesResult()
+		for _, t := range ts {
+			s := status[t.Hash]
+			if s == nil {
+				continue
+			}
+
+			result.ScrapedTotal += s.LastScrapeStatistics.ScrapedTotal
+			if withMetricsDetail == "true" {
+				for k, v := range s.LastScrapeStatistics.MetricsTotal {
+					m := result.MetricsTotal[k]
+					if result.MetricsTotal[k] == nil {
+						m = &scrape.MetricSamplesInfo{}
+						result.MetricsTotal[k] = m
+					}
+					m.Scraped += v.Scraped
+					m.Total += v.Total
+				}
+			}
+		}
+		ret[job] = result
+	}
+
+	return api.Data(ret)
 }
