@@ -84,7 +84,7 @@ func init() {
 		"label selector for select target StatefulSets [shard.type must be 'k8s']")
 	coordinatorCmd.Flags().IntVar(&cdCfg.shardPort, "shard.port", 8080,
 		"the port of sidecar server")
-	coordinatorCmd.Flags().Int64Var(&cdCfg.shardMaxHeadSeries, "shard.max-head-series", 1000000,
+	coordinatorCmd.Flags().Int64Var(&cdCfg.shardMaxHeadSeries, "shard.max-head-series", 0,
 		"max head series of per shard, skipped if 0")
 	coordinatorCmd.Flags().Int64Var(&cdCfg.shardMaxProcessSeries, "shard.max-process-series", 1000000,
 		"max head series of per shard, can not be 0")

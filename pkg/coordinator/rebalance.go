@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	minWaitScrapeTimes = 3
+	minWaitScrapeTimes = 2
 )
 
 type shardInfo struct {
@@ -224,13 +224,17 @@ func (c *Coordinator) gcTargets(changeAbleShards []*shardInfo, active map[uint64
 				st := other.scraping[h]
 				if st != nil && st.ScrapeTimes >= minWaitScrapeTimes {
 					// is in_transfer state and had been scraped by other shard
-					if (tar.TargetState == target.StateInTransfer && st.TargetState == target.StateNormal) ||
-						// is in normal state and had been scraped by other shard with lower head series
-						(tar.TargetState == target.StateNormal &&
-							st.TargetState == target.StateNormal &&
-							other.runtime.HeadSeries < s.runtime.HeadSeries) {
+					if tar.TargetState == target.StateInTransfer && st.TargetState == target.StateNormal {
 						delete(s.scraping, h)
 						break
+					}
+					if tar.TargetState == target.StateNormal &&
+						st.TargetState == target.StateNormal {
+						if (c.option.MaxHeadSeries != 0 && other.runtime.HeadSeries < s.runtime.HeadSeries) ||
+							(c.option.MaxHeadSeries == 0 && other.runtime.ProcessSeries < s.runtime.ProcessSeries) {
+							delete(s.scraping, h)
+							break
+						}
 					}
 				}
 			}
@@ -245,11 +249,11 @@ func (c *Coordinator) alleviateShards(changeAbleShards []*shardInfo) space {
 		return needSpace
 	}
 
-	// alleviate shard if total processing series over 1.3 rate of max
+	// alleviate shard if total processing series over 1.0 rate of max
 	for _, s := range changeAbleShards {
-		if s.runtime.ProcessSeries >= seriesWithRate(c.option.MaxProcessSeries, 1.3) {
+		c.log.Infof("process series of %s is %d", s.shard.ID, s.runtime.ProcessSeries)
+		if s.runtime.ProcessSeries >= seriesWithRate(c.option.MaxProcessSeries, 1.0) {
 			needSpace.processSpace += c.alleviateShardProcessSeries(s, changeAbleShards, seriesWithRate(c.option.MaxProcessSeries, 1))
-			break
 		}
 	}
 
@@ -336,6 +340,7 @@ func (c *Coordinator) alleviateShardHeadSeries(s *shardInfo, changeAbleShards []
 func (c *Coordinator) alleviateShardProcessSeries(s *shardInfo, changeAbleShards []*shardInfo, expSeries int64) (needSpace int64) {
 	total := s.totalTargetsTotalSeries()
 	if total <= expSeries {
+		c.log.Infof("alleviateShardProcessSeries %s cur is %d ,but total target series is %d, skip", s.shard.ID, s.runtime.ProcessSeries, total)
 		return 0
 	}
 
@@ -414,7 +419,7 @@ func (c *Coordinator) assignNoScrapingTargets(
 		// skip not health target
 		status := globalScrapeStatus[hash]
 		if status == nil || status.Health != scrape.HealthGood {
-			c.log.Warnf("target %s status not found or not health", tar.ShardTarget.NoParamURL())
+			//c.log.Warnf("target %s status not found or not health", tar.ShardTarget.NoParamURL())
 			continue
 		}
 		// we may mark too big target as heath down in explore
@@ -432,6 +437,7 @@ func (c *Coordinator) assignNoScrapingTargets(
 		// try get free shard which can hold this target
 		sd := c.getFreeShard(healthShards, tarSp)
 		if sd != nil {
+			c.log.Infof("schedule target %s, total series = %d, scraped series %d , to %s",status.)
 			sd.runtime.HeadSeries += status.Series
 			sd.runtime.ProcessSeries += status.TotalSeries
 			sd.scraping[hash] = status
