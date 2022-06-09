@@ -245,6 +245,6 @@ func TestAPI_RuntimeInfo(t *testing.T) {
 		}
 	}, nil, nil, prometheus.NewRegistry(), logrus.New())
 	res := &shard.RuntimeInfo{}
-	r, _ := api.TestCall(t, a.Engine.ServeHTTP, "/api/v1/shard/runtimeinfo", http.MethodGet, "", res)
+	r, _ := api.TestCall(t, a.Engine.ServeHTTP, "/api/v1/runtimeinfo", http.MethodGet, "", res)
 	r.Equal(int64(200), res.HeadSeries)
 }

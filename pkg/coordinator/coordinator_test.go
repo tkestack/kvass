@@ -70,9 +70,10 @@ func (f *fakeShardsManager) Shards() ([]*shard.Shard, error) {
 		temp := s
 		sd.APIGet = func(url string, ret interface{}) error {
 			dm := map[string]interface{}{
-				"/api/v1/shard/targets/":     temp.targetStatus,
-				"/api/v1/shard/runtimeinfo/": temp.rtInfo,
-				"/api/v1/shard/samples/":     temp.samplesInfo,
+				"/api/v1/shard/targets/":        temp.targetStatus,
+				"/api/v1/shard/targets/status/": temp.targetStatus,
+				"/api/v1/shard/runtimeinfo/":    temp.rtInfo,
+				"/api/v1/shard/samples/":        temp.samplesInfo,
 			}
 			return test.CopyJSON(ret, dm[url])
 		}
