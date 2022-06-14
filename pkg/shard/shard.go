@@ -24,6 +24,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"tkestack.io/kvass/pkg/api"
+	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/target"
 )
@@ -117,6 +118,11 @@ func (r *Shard) TargetStatus() (map[uint64]*target.ScrapeStatus, error) {
 // UpdateConfig try update shard config by API
 func (r *Shard) UpdateConfig(req *UpdateConfigRequest) error {
 	return r.APIPost(r.url+"/api/v1/status/config", req, nil)
+}
+
+// UpdateExtraConfig try update shard extra config by API
+func (r *Shard) UpdateExtraConfig(req *prom.ExtraConfig) error {
+	return r.APIPost(r.url+"/api/v1/status/extra_config", req, nil)
 }
 
 // UpdateTarget try apply targets to sidecar

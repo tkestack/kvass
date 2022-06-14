@@ -176,9 +176,15 @@ func (c *Coordinator) applyShardsInfo(shards []*shardInfo) {
 
 		g.Go(func() (err error) {
 			if err := s.shard.UpdateTarget(&shard.UpdateTargetsRequest{Targets: s.newTargets}); err != nil {
-				c.log.Error(err.Error())
+				c.log.Error(err.Error(), "UpdateTarget")
 				return err
 			}
+
+			if err := s.shard.UpdateExtraConfig(c.getConfig().ExtraConfig); err != nil {
+				c.log.Error(err.Error(), "UpdateExtraConfig")
+				return err
+			}
+
 			return nil
 		})
 	}

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"tkestack.io/kvass/pkg/shard"
+	"tkestack.io/kvass/pkg/utils/test"
 	"tkestack.io/kvass/pkg/utils/types"
 
 	"github.com/gin-contrib/pprof"
@@ -94,6 +95,10 @@ func NewService(
 	w.GET("/api/v1/status/config", h.Wrap(func(ctx *gin.Context) *api.Result {
 		return api.Data(gin.H{"yaml": string(cfgManager.ConfigInfo().RawContent)})
 	}))
+	w.POST("/api/v1/status/extra_config", h.Wrap(w.updateExtraConfig))
+	w.GET("/api/v1/status/extra_config", h.Wrap(func(ctx *gin.Context) *api.Result {
+		return api.Data(gin.H{"json": test.MustJSON(cfgManager.ConfigInfo().ExtraConfig)})
+	}))
 	return w
 }
 
@@ -131,6 +136,19 @@ func (s *Service) samples(ctx *gin.Context) *api.Result {
 	}
 
 	return api.Data(ret)
+}
+
+func (s *Service) updateExtraConfig(g *gin.Context) *api.Result {
+	c := prom.ExtraConfig{}
+	if err := g.BindJSON(&c); err != nil {
+		return api.BadDataErr(err, "bind json")
+	}
+
+	if err := s.cfgManager.UpdateExtraConfig(c); err != nil {
+		return api.BadDataErr(err, "reload failed")
+	}
+
+	return api.Data(nil)
 }
 
 // runtimeInfo return statistics runtimeInfo of all shards

@@ -222,7 +222,7 @@ func TestService_UpdateTargets(t *testing.T) {
 		},
 		IdleAt: nil,
 		Status: map[uint64]*target.ScrapeStatus{
-			1: target.NewScrapeStatus(1),
+			1: target.NewScrapeStatus(1, 1),
 		},
 	}), test.MustJSON(tm.TargetsInfo()))
 }
