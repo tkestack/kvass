@@ -302,6 +302,7 @@ func (c *Coordinator) alleviateShard(s *shardInfo, changeAbleShards []*shardInfo
 				c.log.Infof("transfer target from %s to %s series = (%d) ", s.shard.ID, os.shard.ID, tar.Series)
 				transferTarget(s, os, hash)
 				total -= tar.Series
+				break
 			}
 		}
 	}
