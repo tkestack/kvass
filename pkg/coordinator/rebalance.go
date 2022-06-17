@@ -214,8 +214,7 @@ func (c *Coordinator) gcTargets(changeAbleShards []*shardInfo, active map[uint64
 					// is in_transfer state and had been scraped by other shard
 					if (tar.TargetState == target.StateInTransfer && st.TargetState == target.StateNormal) ||
 						// is in normal state and had been scraped by other shard with lower head series
-						(tar.TargetState == target.StateNormal &&
-							st.TargetState == target.StateNormal &&
+						(tar.TargetState == st.TargetState &&
 							other.runtime.HeadSeries < s.runtime.HeadSeries) {
 						delete(s.scraping, h)
 						break
