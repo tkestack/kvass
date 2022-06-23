@@ -36,10 +36,13 @@ global:
 `
 )
 
+// ExtraConfig is config about kvass it self , not Prometheus config
 type ExtraConfig struct {
+	// StopScrapeReason ,if not empty, all scrape will failed
 	StopScrapeReason string `json:"stopScrapeReason"`
 }
 
+// EQ return true if all ExtraConfig fields is eq
 func (c *ExtraConfig) EQ(e *ExtraConfig) bool {
 	return c.StopScrapeReason == e.StopScrapeReason
 }
