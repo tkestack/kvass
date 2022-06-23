@@ -234,8 +234,8 @@ func (c *Coordinator) gcTargets(changeAbleShards []*shardInfo, active map[uint64
 						delete(s.scraping, h)
 						break
 					}
-					if tar.TargetState == target.StateNormal &&
-						st.TargetState == target.StateNormal {
+
+					if tar.TargetState == st.TargetState {
 						if (c.option.MaxHeadSeries != 0 && other.runtime.HeadSeries < s.runtime.HeadSeries) ||
 							(c.option.MaxHeadSeries == 0 && other.runtime.ProcessSeries < s.runtime.ProcessSeries) {
 							delete(s.scraping, h)
@@ -333,6 +333,7 @@ func (c *Coordinator) alleviateShardHeadSeries(s *shardInfo, changeAbleShards []
 				c.log.Infof("transfer target from %s to %s series = (%d) ", s.shard.ID, os.shard.ID, tar.Series)
 				transferTarget(s, os, hash)
 				total -= tar.Series
+				break
 			}
 		}
 	}
