@@ -7,7 +7,7 @@ Kvass is a [Prometheus](https://github.com/prometheus/prometheus) horizontal aut
 Coordinator do service discovery, Prometheus shards management and assign targets to each of shard.
 [Thanos](https://github.com/thanos-io/thanos) (or other storage solution) is used for global data view.
 
-  [![Go Report Card](https://goreportcard.com/badge/github.com/tkestack/kvass)](https://goreportcard.com/report/github.com/tkestack/kvass)  [![Build](https://github.com/tkestack/kvass/workflows/Build/badge.svg?branch=master)]()   [![codecov](https://codecov.io/gh/tkestack/kvass/branch/master/graph/badge.svg)](https://codecov.io/gh/tkestack/kvass)
+  [![Go Report Card](https://goreportcard.com/badge/github.com/tkestack/kvass)](https://goreportcard.com/report/github.com/tkestack/kvass)  [![Build](https://github.com/tkestack/kvass/workflows/Build/badge.svg?branch=master)]() 
 
 ------
 
