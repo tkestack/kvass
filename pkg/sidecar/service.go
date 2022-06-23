@@ -32,6 +32,7 @@ import (
 	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/shard"
+	"tkestack.io/kvass/pkg/utils/test"
 	"tkestack.io/kvass/pkg/utils/types"
 )
 
@@ -92,7 +93,10 @@ func NewService(
 		return api.Data(gin.H{"yaml": string(s.cfgManager.ConfigInfo().RawContent)})
 	}))
 	s.ginEngine.POST(s.localPath("/api/v1/status/config/"), h.Wrap(s.updateConfig))
-
+	s.ginEngine.POST(s.localPath("/api/v1/status/extra_config/"), h.Wrap(s.updateExtraConfig))
+	s.ginEngine.GET("/api/v1/status/extra_config/", h.Wrap(func(ctx *gin.Context) *api.Result {
+		return api.Data(gin.H{"json": test.MustJSON(s.cfgManager.ConfigInfo().ExtraConfig)})
+	}))
 	return s
 }
 
@@ -150,6 +154,19 @@ func (s *Service) updateTargets(g *gin.Context) *api.Result {
 
 	if err := s.targetManager.UpdateTargets(r); err != nil {
 		return api.InternalErr(err, "")
+	}
+
+	return api.Data(nil)
+}
+
+func (s *Service) updateExtraConfig(g *gin.Context) *api.Result {
+	c := prom.ExtraConfig{}
+	if err := g.BindJSON(&c); err != nil {
+		return api.BadDataErr(err, "bind json")
+	}
+
+	if err := s.cfgManager.UpdateExtraConfig(c); err != nil {
+		return api.BadDataErr(err, "reload failed")
 	}
 
 	return api.Data(nil)

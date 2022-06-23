@@ -30,6 +30,7 @@ import (
 	scrape2 "github.com/prometheus/prometheus/scrape"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/target"
 )
@@ -128,6 +129,9 @@ func TestProxy_ServeHTTP(t *testing.T) {
 				},
 				func() map[uint64]*target.ScrapeStatus {
 					return cs.status
+				},
+				func() *prom.ConfigInfo {
+					return prom.DefaultConfig
 				},
 				prometheus.NewRegistry(),
 				logrus.New())

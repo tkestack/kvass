@@ -113,3 +113,23 @@ scrape_configs:
 		})
 	}
 }
+
+func TestConfigManager_UpdateExtraConfig(t *testing.T) {
+	m := NewConfigManager()
+	updated := false
+	m.AddReloadCallbacks(func(c *ConfigInfo) error {
+		updated = true
+		require.Equal(t, "test", c.ExtraConfig.StopScrapeReason)
+		return nil
+	})
+
+	m.UpdateExtraConfig(ExtraConfig{
+		StopScrapeReason: "", // not change
+	})
+	require.False(t, updated)
+
+	m.UpdateExtraConfig(ExtraConfig{
+		StopScrapeReason: "test", // not change
+	})
+	require.True(t, updated)
+}

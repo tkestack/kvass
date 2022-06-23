@@ -27,6 +27,7 @@ import (
 	parser "github.com/VictoriaMetrics/VictoriaMetrics/lib/protoparser/prometheus"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
+	"tkestack.io/kvass/pkg/prom"
 	"tkestack.io/kvass/pkg/scrape"
 	"tkestack.io/kvass/pkg/target"
 )
@@ -49,6 +50,7 @@ var (
 type Proxy struct {
 	getJob    func(jobName string) *scrape.JobInfo
 	getStatus func() map[uint64]*target.ScrapeStatus
+	getCurCfg func() *prom.ConfigInfo
 	log       logrus.FieldLogger
 }
 
@@ -56,6 +58,7 @@ type Proxy struct {
 func NewProxy(
 	getJob func(jobName string) *scrape.JobInfo,
 	getStatus func() map[uint64]*target.ScrapeStatus,
+	getCurCfg func() *prom.ConfigInfo,
 	promRegistry prometheus.Registerer,
 	log logrus.FieldLogger) *Proxy {
 	_ = promRegistry.Register(proxyTotal)
@@ -64,6 +67,7 @@ func NewProxy(
 	return &Proxy{
 		getJob:    getJob,
 		getStatus: getStatus,
+		getCurCfg: getCurCfg,
 		log:       log,
 	}
 }
@@ -76,6 +80,7 @@ func (p *Proxy) Run(address string) error {
 // ServeHTTP handle one Proxy request
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	proxyTotal.WithLabelValues().Inc()
+	stopReason := p.getCurCfg().ExtraConfig.StopScrapeReason
 
 	job, hashStr, realURL := translateURL(*r.URL)
 	jobInfo := p.getJob(job)
@@ -97,22 +102,29 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	var scrapErr error
 	defer func() {
-		if tar != nil {
-			tar.ScrapeTimes++
-			tar.SetScrapeErr(start, scrapErr)
-		}
-
 		if scrapErr != nil {
 			p.log.Errorf(scrapErr.Error())
 			w.WriteHeader(http.StatusBadRequest)
 			if tar != nil {
 				tar.LastScrapeStatistics = scrape.NewStatisticsSeriesResult()
 			}
+		} else if stopReason != "" {
+			p.log.Warnf(stopReason)
+			w.WriteHeader(http.StatusBadRequest)
+			scrapErr = fmt.Errorf(stopReason)
+		}
+
+		if tar != nil {
+			tar.ScrapeTimes++
+			tar.SetScrapeErr(start, scrapErr)
 		}
 	}()
 
 	scraper := scrape.NewScraper(jobInfo, realURL.String(), p.log)
-	scraper.WithRawWriter(w)
+	if stopReason == "" {
+		scraper.WithRawWriter(w)
+	}
+
 	if err := scraper.RequestTo(); err != nil {
 		scrapErr = fmt.Errorf("RequestTo %s  %s %v", job, realURL.String(), err)
 		return

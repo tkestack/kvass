@@ -95,6 +95,7 @@ var sidecarCmd = &cobra.Command{
 				func() map[uint64]*target.ScrapeStatus {
 					return targetManager.TargetsInfo().Status
 				},
+				configManager.ConfigInfo,
 				promRegistry,
 				log.WithField("component", "target manager"))
 
