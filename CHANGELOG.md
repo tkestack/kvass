@@ -1,7 +1,17 @@
 
-## [v0.2.1] - 2022-02-15
-### Feat 
-- add some metrics in proxy component to statistic series and scrape durtion  ([#86](https://github.com/tkestack/kvass/issues/86))
+## [v0.3.0] - 2022-06-23
+### Feat
+- max origin series and scrape statistics ([#94](https://github.com/tkestack/kvass/issues/94))
+
+## [v0.2.3] - 2022-06-17
+### Fix
+- miss 'break' in alleviate shard
+
+
+## [v0.2.2] - 2022-06-17
+### Fix
+- targets gc
+
 ## [v0.2.0] - 2022-01-03
 ### Feat
 - add metrics ([#82](https://github.com/tkestack/kvass/issues/82))
