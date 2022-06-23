@@ -155,7 +155,7 @@ func (t *TargetsManager) updateStatus() {
 	for job, ts := range t.targets.Targets {
 		for _, tar := range ts {
 			if t.targets.Status[tar.Hash] == nil {
-				status[tar.Hash] = target.NewScrapeStatus(tar.Series)
+				status[tar.Hash] = target.NewScrapeStatus(tar.Series, tar.TotalSeries)
 			} else {
 				status[tar.Hash] = t.targets.Status[tar.Hash]
 			}

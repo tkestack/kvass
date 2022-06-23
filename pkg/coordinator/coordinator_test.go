@@ -576,11 +576,11 @@ func TestCoordinator_RunOnce(t *testing.T) {
 	for _, cs := range cases {
 		t.Run(cs.name, func(t *testing.T) {
 			option := &Option{
-				MaxSeries:   cs.maxSeries,
-				MaxShard:    cs.maxShard,
-				MinShard:    cs.minShard,
-				MaxIdleTime: cs.maxIdleTime,
-				Period:      cs.period,
+				MaxHeadSeries: cs.maxSeries,
+				MaxShard:      cs.maxShard,
+				MinShard:      cs.minShard,
+				MaxIdleTime:   cs.maxIdleTime,
+				Period:        cs.period,
 			}
 			c := NewCoordinator(option,
 				&fakeReplicasManager{cs.shardManager},
@@ -637,11 +637,11 @@ func TestCoordinator_LastGlobalScrapeStatus(t *testing.T) {
 	}
 
 	option := &Option{
-		MaxSeries:   100,
-		MaxShard:    100,
-		MinShard:    100,
-		MaxIdleTime: time.Second,
-		Period:      0,
+		MaxHeadSeries: 100,
+		MaxShard:      100,
+		MinShard:      100,
+		MaxIdleTime:   time.Second,
+		Period:        0,
 	}
 	c := NewCoordinator(option,
 		&fakeReplicasManager{shardManager}, func() *prom.ConfigInfo {

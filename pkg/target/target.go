@@ -18,11 +18,12 @@
 package target
 
 import (
+	"net/url"
+	"strings"
+
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/pkg/labels"
-	"net/url"
-	"strings"
 )
 
 const (
@@ -44,6 +45,8 @@ type Target struct {
 	Labels labels.Labels `json:"labels"`
 	// Series is reference series of this target, may from target explorer
 	Series int64 `json:"series"`
+	// TotalSeries is the total series in last scraping, without metrics_relabel_configs
+	TotalSeries int64 `json:"totalSeries"`
 	// TargetState indicate current state of this target
 	TargetState string `json:"TargetState"`
 }

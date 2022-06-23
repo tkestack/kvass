@@ -145,7 +145,7 @@ func (e *Explore) UpdateTargets(targets map[string][]*discovery.SDTargets) {
 			} else {
 				all[hash] = &exploringTarget{
 					job:    job,
-					rt:     target.NewScrapeStatus(0),
+					rt:     target.NewScrapeStatus(0, 0),
 					target: t.ShardTarget,
 				}
 			}
@@ -209,9 +209,9 @@ func (e *Explore) exploreOnce(ctx context.Context, t *exploringTarget) (err erro
 		return errors.Wrapf(err, "explore failed : %s/%s", t.job, url)
 	}
 
-	t.rt.Series = int64(result.ScrapedTotal)
-
+	t.rt.UpdateScrapeResult(result)
 	t.target.Series = int64(result.ScrapedTotal)
+	t.target.TotalSeries = int64(result.Total)
 	t.rt.LastScrapeStatistics = result
 
 	return nil

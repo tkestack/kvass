@@ -135,15 +135,16 @@ func (s *Service) samples(ctx *gin.Context) *api.Result {
 
 // runtimeInfo return statistics runtimeInfo of all shards
 func (s *Service) runtimeInfo(ctx *gin.Context) *api.Result {
-	series := int64(0)
-	for _, st := range s.getScrapeStatus() {
-		series += st.Series
+	rt := &shard.RuntimeInfo{
+		ConfigHash: s.cfgManager.ConfigInfo().ConfigHash,
 	}
 
-	return api.Data(&shard.RuntimeInfo{
-		ConfigHash: s.cfgManager.ConfigInfo().ConfigHash,
-		HeadSeries: series,
-	})
+	for _, st := range s.getScrapeStatus() {
+		rt.HeadSeries += st.Series
+		rt.ProcessSeries += st.TotalSeries
+	}
+
+	return api.Data(rt)
 }
 
 // ExtendTarget extend Prometheus v1.Target
@@ -152,6 +153,8 @@ type ExtendTarget struct {
 	v1.Target
 	// Series is the avg series of last 5 scraping results
 	Series int64 `json:"series"`
+	// TotalSeries is the total series without metrics_relabel
+	TotalSeries int64 `json:"totalSeries"`
 	// Shards contains ID of shards that is scraping this target
 	Shards []string `json:"shards"`
 }
@@ -256,7 +259,7 @@ func (s *Service) statisticActiveTargets(jobRegexp []*regexp.Regexp, health []st
 		for _, t := range activeTargets[jobName] {
 			rt := status[t.ShardTarget.Hash]
 			if rt == nil {
-				rt = target.NewScrapeStatus(0)
+				rt = target.NewScrapeStatus(0, 0)
 			}
 			jobSts.Total++
 			jobSts.Health[rt.Health]++
@@ -307,8 +310,9 @@ func makeTarget(jobName string, target *scrape.Target, rt *target.ScrapeStatus) 
 			LastScrapeDuration: rt.LastScrapeDuration,
 			Health:             rt.Health,
 		},
-		Series: rt.Series,
-		Shards: rt.Shards,
+		Series:      rt.Series,
+		Shards:      rt.Shards,
+		TotalSeries: rt.TotalSeries,
 	}
 }
 

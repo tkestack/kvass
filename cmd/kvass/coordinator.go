@@ -55,7 +55,8 @@ var cdCfg = struct {
 	shardNamespace         string
 	shardSelector          string
 	shardPort              int
-	shardMaxSeries         int64
+	shardMaxHeadSeries     int64
+	shardMaxProcessSeries  int64
 	shardMinShard          int32
 	shardMaxShard          int32
 	shardMaxIdleTime       time.Duration
@@ -83,8 +84,10 @@ func init() {
 		"label selector for select target StatefulSets [shard.type must be 'k8s']")
 	coordinatorCmd.Flags().IntVar(&cdCfg.shardPort, "shard.port", 8080,
 		"the port of sidecar server")
-	coordinatorCmd.Flags().Int64Var(&cdCfg.shardMaxSeries, "shard.max-series", 1000000,
-		"max series of per shard")
+	coordinatorCmd.Flags().Int64Var(&cdCfg.shardMaxHeadSeries, "shard.max-head-series", 0,
+		"max head series of per shard, skipped if 0")
+	coordinatorCmd.Flags().Int64Var(&cdCfg.shardMaxProcessSeries, "shard.max-process-series", 1000000,
+		"max head series of per shard, can not be 0")
 	coordinatorCmd.Flags().Int32Var(&cdCfg.shardMaxShard, "shard.max-shard", 999999,
 		"max shard number")
 	coordinatorCmd.Flags().Int32Var(&cdCfg.shardMinShard, "shard.min-shard", 0,
@@ -125,6 +128,10 @@ distribution targets to shards`,
 			return err
 		}
 
+		if cdCfg.shardMaxProcessSeries == 0 {
+			return fmt.Errorf("shard.max-process-series can not be 0")
+		}
+
 		level := &promlog.AllowedLevel{}
 		level.Set("info")
 		format := &promlog.AllowedFormat{}
@@ -144,7 +151,8 @@ distribution targets to shards`,
 
 			cd = coordinator.NewCoordinator(
 				&coordinator.Option{
-					MaxSeries:        cdCfg.shardMaxSeries,
+					MaxHeadSeries:    cdCfg.shardMaxHeadSeries,
+					MaxProcessSeries: cdCfg.shardMaxProcessSeries,
 					MaxShard:         cdCfg.shardMaxShard,
 					MinShard:         cdCfg.shardMinShard,
 					MaxIdleTime:      cdCfg.shardMaxIdleTime,

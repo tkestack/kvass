@@ -37,15 +37,6 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v2
 
-      - name: Run Unit tests.
-        run: make test-coverage
-
-      - name: Upload Coverage report to CodeCov
-        uses: codecov/codecov-action@v1.0.0
-        with:
-          token: ${{secrets.CODECOV_TOKEN}}
-          file: ./coverage.txt
-
   build:
     name: Build
     runs-on: ubuntu-latest
