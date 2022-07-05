@@ -1,7 +1,11 @@
 
+## [v0.3.1] - 2022-07-05
+### Fix
+- bugfix: dup transfer target ([#101](https://github.com/tkestack/kvass/issues/101))
+
 ## [v0.3.0] - 2022-06-23
-### Feat
-- max origin series and scrape statistics ([#94](https://github.com/tkestack/kvass/issues/94))
+### Fix
+- target gc and duplicate alleviate shard ([#96](https://github.com/tkestack/kvass/issues/96))
 
 ## [v0.2.3] - 2022-06-17
 ### Fix
@@ -11,6 +15,9 @@
 ## [v0.2.2] - 2022-06-17
 ### Fix
 - targets gc
+
+
+## [v0.2.1] - 2022-02-15
 
 ## [v0.2.0] - 2022-01-03
 ### Feat
