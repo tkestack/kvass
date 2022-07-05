@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	minWaitScrapeTimes = 2
+	minWaitScrapeTimes = 0
 )
 
 type shardInfo struct {
@@ -330,7 +330,7 @@ func (c *Coordinator) alleviateShardHeadSeries(s *shardInfo, changeAbleShards []
 			}
 
 			if os.runtime.HeadSeries+tar.Series < c.option.MaxHeadSeries {
-				c.log.Infof("transfer target from %s to %s series = (%d) ", s.shard.ID, os.shard.ID, tar.Series)
+				c.log.Infof("need transfer target %d, from %s to %s series = (%d) ", hash, s.shard.ID, os.shard.ID, tar.Series)
 				transferTarget(s, os, hash)
 				total -= tar.Series
 				break
@@ -376,9 +376,10 @@ func (c *Coordinator) alleviateShardProcessSeries(s *shardInfo, changeAbleShards
 
 			if (c.option.MaxHeadSeries == 0 || os.runtime.HeadSeries+tar.Series < c.option.MaxHeadSeries) &&
 				(os.runtime.ProcessSeries+tar.TotalSeries < c.option.MaxProcessSeries) {
-				c.log.Infof("transfer target from %s to %s series = (%d) ", s.shard.ID, os.shard.ID, tar.Series)
+				c.log.Infof("need transfer %d target from %s to %s series = (%d) ", hash, s.shard.ID, os.shard.ID, tar.Series)
 				transferTarget(s, os, hash)
 				total -= tar.TotalSeries
+				break
 			}
 		}
 	}
