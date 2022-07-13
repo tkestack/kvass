@@ -101,7 +101,7 @@ spec:
             - --storage.tsdb.min-block-duration=2h
             - --config.file=/etc/prometheus/config_out/prometheus_injected.yaml # use injected config file instead of origin config file
             - --log.level=debug
-          image: prom/prometheus:v2.33.3
+          image: prom/prometheus:v2.36.2
           ports:
             - containerPort: 9090
               name: server

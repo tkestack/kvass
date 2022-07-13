@@ -76,7 +76,7 @@ func TestTargetsManager_Load(t *testing.T) {
 					},
 				},
 				Status: map[uint64]*target.ScrapeStatus{
-					1: target.NewScrapeStatus(1),
+					1: target.NewScrapeStatus(1, 1),
 				},
 			},
 		},
@@ -95,7 +95,7 @@ func TestTargetsManager_Load(t *testing.T) {
 					},
 				},
 				Status: map[uint64]*target.ScrapeStatus{
-					1: target.NewScrapeStatus(1),
+					1: target.NewScrapeStatus(1, 1),
 				},
 			},
 		},
@@ -154,7 +154,7 @@ func TestTargetsManager_UpdateTargets(t *testing.T) {
 					},
 				},
 				Status: map[uint64]*target.ScrapeStatus{
-					1: target.NewScrapeStatus(1),
+					1: target.NewScrapeStatus(1, 1),
 				},
 			},
 		},
@@ -170,7 +170,7 @@ func TestTargetsManager_UpdateTargets(t *testing.T) {
 					},
 				},
 				Status: map[uint64]*target.ScrapeStatus{
-					1: target.NewScrapeStatus(1),
+					1: target.NewScrapeStatus(1, 1),
 				},
 			},
 			req: &shard.UpdateTargetsRequest{

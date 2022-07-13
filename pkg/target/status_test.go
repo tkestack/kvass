@@ -29,13 +29,13 @@ import (
 
 func TestScrapeStatus_SetScrapeErr(t *testing.T) {
 	r := require.New(t)
-	st := NewScrapeStatus(10)
+	st := NewScrapeStatus(10, 10)
 	r.Equal(int64(10), st.Series)
 	st.SetScrapeErr(time.Now(), nil)
 	r.Equal(scrape.HealthGood, st.Health)
 	r.Equal("", st.LastError)
 
-	st = NewScrapeStatus(10)
+	st = NewScrapeStatus(10, 10)
 	st.SetScrapeErr(time.Now(), fmt.Errorf("test"))
 	r.Equal(scrape.HealthBad, st.Health)
 	r.Equal("test", st.LastError)
@@ -43,7 +43,7 @@ func TestScrapeStatus_SetScrapeErr(t *testing.T) {
 
 func TestScrapeStatus_UpdateSamples(t *testing.T) {
 	r := require.New(t)
-	st := NewScrapeStatus(1)
+	st := NewScrapeStatus(1, 1)
 	rs := kscrape.NewStatisticsSeriesResult()
 	rs.ScrapedTotal = 2
 	st.UpdateScrapeResult(rs)
