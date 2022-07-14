@@ -9,12 +9,12 @@ import (
 	"strings"
 	"tkestack.io/kvass/pkg/target"
 
-	"github.com/prometheus/prometheus/pkg/relabel"
+	"github.com/prometheus/prometheus/model/relabel"
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 
 	"tkestack.io/kvass/pkg/utils/types"
 

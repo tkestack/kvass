@@ -29,7 +29,7 @@ import (
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"tkestack.io/kvass/pkg/target"
@@ -83,7 +83,7 @@ remote_read:
 	r.NoError(in.UpdateTargets(map[string][]*target.Target{
 		"job": {tar},
 	}))
-	out, err := config.LoadFile(outFile, true, log.NewNopLogger())
+	out, err := config.LoadFile(outFile, false, true, log.NewNopLogger())
 	r.NoError(err)
 
 	outJob := out.ScrapeConfigs[0]

@@ -4,19 +4,18 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"sync"
+	"time"
 
 	"github.com/klauspost/compress/gzip"
 	"tkestack.io/kvass/pkg/utils/types"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/protoparser/common"
 	"github.com/pkg/errors"
-	"github.com/prometheus/prometheus/pkg/labels"
-	"github.com/prometheus/prometheus/pkg/relabel"
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/sirupsen/logrus"
-
-	"net/http"
-	"time"
 
 	parser "github.com/VictoriaMetrics/VictoriaMetrics/lib/protoparser/prometheus"
 )
