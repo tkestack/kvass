@@ -9,6 +9,7 @@ GOARCH := "amd64"
 all: test-coverage lint vet  build
 
 dep: ## Get the dependencies
+	@go mod tidy
 	@go mod download
 
 lint: ## Lint Golang files
