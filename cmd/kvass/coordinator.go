@@ -50,25 +50,26 @@ import (
 )
 
 var cdCfg = struct {
-	shardType              string
-	shardStaticFile        string
-	shardNamespace         string
-	shardSelector          string
-	shardPort              int
-	shardMaxHeadSeries     int64
-	shardMaxProcessSeries  int64
-	shardMinShard          int32
-	shardMaxShard          int32
-	shardMaxIdleTime       time.Duration
-	shardDisableAlleviate  bool
-	shardDeletePVC         bool
-	exploreMaxCon          int
-	scrapeKeepAliveDisable bool
-	webAddress             string
-	configFile             string
-	syncInterval           time.Duration
-	sdInitTimeout          time.Duration
-	configInject           configInjectOption
+	shardType                 string
+	shardStaticFile           string
+	shardNamespace            string
+	shardSelector             string
+	shardPort                 int
+	shardMaxHeadSeries        int64
+	shardMaxProcessSeries     int64
+	shardMinShard             int32
+	shardMaxShard             int32
+	shardMaxIdleTime          time.Duration
+	shardDisableAlleviate     bool
+	shardDeletePVC            bool
+	exploreMaxCon             int
+	scrapeKeepAliveDisable    bool
+	discoveryKeepAliveDisable bool
+	webAddress                string
+	configFile                string
+	syncInterval              time.Duration
+	sdInitTimeout             time.Duration
+	configInject              configInjectOption
 }{}
 
 func init() {
@@ -100,6 +101,8 @@ func init() {
 	coordinatorCmd.Flags().IntVar(&cdCfg.exploreMaxCon, "explore.concurrence", 200,
 		"max explore concurrence")
 	coordinatorCmd.Flags().BoolVar(&cdCfg.scrapeKeepAliveDisable, "scrape.disable-keep-alive", false,
+		"disable http keep alive")
+	coordinatorCmd.Flags().BoolVar(&cdCfg.discoveryKeepAliveDisable, "discovery.disable-keep-alive", false,
 		"disable http keep alive")
 	coordinatorCmd.Flags().StringVar(&cdCfg.webAddress, "web.address", ":9090",
 		"server bind address")
@@ -136,6 +139,12 @@ distribution targets to shards`,
 		level.Set("info")
 		format := &promlog.AllowedFormat{}
 		format.Set("logfmt")
+
+		opt := make([]config_util.HTTPClientOption, 0)
+		if cdCfg.discoveryKeepAliveDisable {
+			opt = append(opt, config_util.WithKeepAlivesDisabled())
+		}
+
 		var (
 			lg     = logrus.New()
 			logger = promlog.New(&promlog.Config{
@@ -144,10 +153,11 @@ distribution targets to shards`,
 			})
 
 			scrapeManager          = scrape.New(cdCfg.scrapeKeepAliveDisable, lg.WithField("component", "scrape discovery"))
-			discoveryManagerScrape = prom_discovery.NewManager(context.Background(), log.With(logger, "component", "discovery manager scrape"), prom_discovery.Name("scrape"))
-			targetDiscovery        = discovery.New(lg.WithField("component", "target discovery"))
-			exp                    = explore.New(scrapeManager, promRegistry, lg.WithField("component", "explore"))
-			cfgManager             = prom.NewConfigManager()
+			discoveryManagerScrape = prom_discovery.NewManager(context.Background(), log.With(logger, "component", "discovery manager scrape"), prom_discovery.Name("scrape"),
+				prom_discovery.HTTPClientOptions(opt...))
+			targetDiscovery = discovery.New(lg.WithField("component", "target discovery"))
+			exp             = explore.New(scrapeManager, promRegistry, lg.WithField("component", "explore"))
+			cfgManager      = prom.NewConfigManager()
 
 			cd = coordinator.NewCoordinator(
 				&coordinator.Option{

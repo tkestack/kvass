@@ -1,3 +1,6 @@
+## [v0.3.2] - 2022-11-16
+### Feat
+- support disable http keep alive during service discovery
 
 ## [v0.3.1] - 2022-07-05
 ### Fix
